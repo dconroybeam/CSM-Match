@@ -220,27 +220,17 @@ resample <- function(x,...){if(length(x)==1) x else sample(x,...)}
 
 ```{r analysis}
 
-#Select a subsample of participants
-samp<-sample(unique(data$CIN),n)
-
-#Separate males and females
-males <- data[data$sex == 1 & data$CIN %in% samp, ]
-females <- data[data$sex == 0 & data$CIN %in% samp, ]
-
-#Determine which preferences to start
-startPrefs <- sample(1:16, numPrefs)
-
-#Compute accuracy for this starting set of preferences
-startAcc <- mateChoice(females, males, startPrefs)
-
 #Create a vector to store the number of times a preference appeared in a winning set
 prefRecord <- rep(0, 16)
 
-#Create a dataframe to store accuracy as a function of preference set
+#Load the dataframe to store accuracy as a function of preference set
 accRecord <- read.csv(mrPath)
 
 #Create a variable to track number of loops completed so far
 l<-max(c(0,accRecord$loop),na.rm=T)
+
+#Determine which preferences to start with
+startPrefs <- sample(1:16, numPrefs)
 
 #As long as there are still loops to complete...
 while (sum(rowSums(is.na(accRecord))<13) < loops) {
@@ -249,12 +239,14 @@ while (sum(rowSums(is.na(accRecord))<13) < loops) {
   l<-l+1
   
   #Choose a new set of participants each time to avoid overfitting
-  #Select a subsample of participants
   samp<-sample(unique(data$CIN),n)
   
   #Separate males and females
   males <- data[data$sex == 1 & data$CIN %in% samp, ]
   females <- data[data$sex == 0 & data$CIN %in% samp, ]
+  
+  #Compute accuracy for this starting set of preferences
+  startAcc <- mateChoice(females, males, startPrefs)
   
   #Randomly change one preference from the starting set to make the testing set
   testPrefs <- startPrefs
