@@ -22,47 +22,53 @@ library(ggplot2)
 
 ```{r parameters}
 
+
 #Human Data#
 #Load in data
-data<-read.csv(file="Human Data/Processed Data/CAREER2P PROCESSED Data 08262020 114326.csv")
+data <-
+  read.csv(file = "Human Data/Processed Data/CAREER2P PROCESSED Data 08262020 114326.csv")
 
 #Remove unnecessary variables
-data<-data[,c(1,3:11,199:214,277:292)]
+data <- data[, c(1, 3:11, 199:214, 277:292)]
 
 
 
 #Number of loops to test preferences
-loops<-10000
+loops <- 10000
 
 
 
 #Number of preferences to consider including
-numPrefs<-10
+numPrefs <- 10
 
 
 
 #Extract and save preference names for later
-prefNames<-tools::toTitleCase(gsub("ideal_","",colnames(data[,11:26])))
+prefNames <-
+  tools::toTitleCase(gsub("ideal_", "", colnames(data[, 11:26])))
 
 
 
 #Sample size
 #Number of couples to include for modeling
-n<-100
+n <- 100
 
 
 
 #Creating a file to save results (if necessary)
-mrPath<-paste0("Model Outputs/CSM Match Pref Modeling Outputs Pref",numPrefs," N",n," .csv")
+mrPath <-
+  paste0("Model Outputs/CSM Match Pref Modeling Outputs Prefs",
+         numPrefs,
+         " N",
+         n,
+         " .csv")
 
-if(file.exists(mrPath)==F){
+if (file.exists(mrPath) == F) {
+  output <- data.frame(matrix(NA, 1, 19))
+  colnames(output) <- c("loop", "numPrefs", prefNames, "acc")
   
-  c("loop","numPrefs",paste0("pref", 1:numPrefs), "acc")
-    output<-data.frame(matrix(NA,1,3+numPrefs))
-    colnames(output)<-c("loop","numPrefs",paste0("pref", 1:numPrefs), "acc")
-    
-    write.csv(output,mrPath,row.names=F)
-
+  write.csv(output, mrPath, row.names = F)
+  
 }
 
 ```
@@ -73,17 +79,20 @@ if(file.exists(mrPath)==F){
 
 
 ```{r functions}
-#Agent generation#
 
 #Attraction calculation#
-mvCalc<-function(ideal,traits){
+mvCalc <- function(ideal, traits) {
   #ideal is ideal preferences
   #traits is actual trait values
-
+  
   #Calculates the Euclidean distance between the agent's preferences and each mate's traits
   #Transforms this distance such that positive values are more attractive by multiplying by -1 and adding 1 plus the maximum possible Euclidean distance
-  mv<-apply(traits,1,function(x) 10*(-1*(dist(rbind(ideal,x)))+sqrt(10^2*length(ideal)))/sqrt(10^2*length(ideal)))
-
+  mv <-
+    apply(traits, 1, function(x)
+      10 * (-1 * (dist(rbind(
+        ideal, x
+      ))) + sqrt(10 ^ 2 * length(ideal))) / sqrt(10 ^ 2 * length(ideal)))
+  
   
   return(mv)
   
@@ -92,101 +101,106 @@ mvCalc<-function(ideal,traits){
 
 
 #Mate choice function
-mateChoice<-function(females,males,prefs){
-  
+mateChoice <- function(females, males, prefs) {
   #Determine true pairs
-  trueRels<-cbind(females$PIN,males$PIN)
+  trueRels <- cbind(females$PIN, males$PIN)
   
   #Mate Value Calculation#
   
   #Males
   #Calculate how attracted each male is to each female
   
-  maleAttMatrix<-t(apply(males,1,function(q) mvCalc(q[(prefs+10)],females[,(prefs+26)])))
+  maleAttMatrix <-
+    t(apply(males, 1, function(q)
+      mvCalc(q[(prefs + 10)], females[, (prefs + 26)])))
   
-  colnames(maleAttMatrix)<-females$PIN
-  rownames(maleAttMatrix)<-males$PIN
+  colnames(maleAttMatrix) <- females$PIN
+  rownames(maleAttMatrix) <- males$PIN
   
   #Females
   #Calculate how attracted each female is to each male
   
-  femaleAttMatrix<-t(apply(females,1,function(q) mvCalc(q[(prefs+10)],males[,c(prefs+26)])))
+  femaleAttMatrix <-
+    t(apply(females, 1, function(q)
+      mvCalc(q[(prefs + 10)], males[, c(prefs + 26)])))
   
-  colnames(femaleAttMatrix)<-males$PIN
-  rownames(femaleAttMatrix)<-females$PIN
+  colnames(femaleAttMatrix) <- males$PIN
+  rownames(femaleAttMatrix) <- females$PIN
   
-
+  
   #Generate a dataframe for second pairings
-  pairs<-matrix(NA,1,(ncol(males)+ncol(females)))
+  pairs <- matrix(NA, 1, (ncol(males) + ncol(females)))
   
   #Name the pairs dataframe for cbinding
-  colnames(pairs)<-c(colnames(females),colnames(males))
+  colnames(pairs) <- c(colnames(females), colnames(males))
   
   
   #Generate dataframes to store the number of visits
-  investMale<-matrix(1,nrow(males),nrow(females))
-  investFemale<-matrix(1,nrow(females),nrow(males))
+  investMale <- matrix(1, nrow(males), nrow(females))
+  investFemale <- matrix(1, nrow(females), nrow(males))
   
   #Generate matrices to track history of reciprocity for RWTS
-  recipHistMale<-matrix(1,nrow(males),nrow(females))
-  recipHistFemale<-matrix(1,nrow(females),nrow(males))
+  recipHistMale <- matrix(1, nrow(males), nrow(females))
+  recipHistFemale <- matrix(1, nrow(females), nrow(males))
   
   
   
   #Determine how many observations agents will have to allocate
-  nobs<-(nrow(males))*3
+  nobs <- (nrow(males)) * 3
   
-  #Loop through observation opportunities        
-  for(o in 1:nobs){
-    
-    mReward<-maleAttMatrix*recipHistMale
-    fReward<-femaleAttMatrix*recipHistFemale
+  #Loop through observation opportunities
+  for (o in 1:nobs) {
+    mReward <- maleAttMatrix * recipHistMale
+    fReward <- femaleAttMatrix * recipHistFemale
     
     #Choose the partner with the highest MV, weighted by reciprocity
-    choiceMale<-cbind(1:nrow(males),
-                      apply(mReward,1,function(x)
-                            resample(which(x==max(x)),1)))
+    choiceMale <- cbind(1:nrow(males),
+                        apply(mReward, 1, function(x)
+                          resample(which(x == max(
+                            x
+                          )), 1)))
     
-    choiceFemale<-cbind(1:nrow(females),
-                        apply(fReward,1,function(x)
-                              resample(which(x==max(x)),1)))
+    choiceFemale <- cbind(1:nrow(females),
+                          apply(fReward, 1, function(x)
+                            resample(which(x == max(
+                              x
+                            )), 1)))
     
     #Update observation counts
-    investMale[choiceMale]<-investMale[choiceMale]+1
-    investFemale[choiceFemale]<-investFemale[choiceFemale]+1
+    investMale[choiceMale] <- investMale[choiceMale] + 1
+    investFemale[choiceFemale] <- investFemale[choiceFemale] + 1
     
     #Update reciprocity histories
-    recipHistMale<-(t(investFemale)/investMale)
-    recipHistFemale<-(t(investMale)/investFemale)
+    recipHistMale <- (t(investFemale) / investMale)
+    recipHistFemale <- (t(investMale) / investFemale)
     
   }
-    
+  
   
   #Determine which female each male has chosen
   #Break ties randomly
-  mChoice<-data.frame("male"=1:nrow(males))
-  mChoice$choice<-apply(investMale,1,function(x)
-                        resample(which(x==max(x)),1))
+  mChoice <- data.frame("male" = 1:nrow(males))
+  mChoice$choice <- apply(investMale, 1, function(x)
+    resample(which(x == max(x)), 1))
   
   #Determine which male each female has chosen
   #Break ties randomly
-  fChoice<-data.frame("female"=1:nrow(females))
-  fChoice$choice<-apply(investFemale,1,function(x)
-                        resample(which(x==max(x)),1))
+  fChoice <- data.frame("female" = 1:nrow(females))
+  fChoice$choice <- apply(investFemale, 1, function(x)
+    resample(which(x == max(x)), 1))
   
   #Loop through females' choices
-  for(p in 1:nrow(fChoice)){
-    
+  for (p in 1:nrow(fChoice)) {
     #Determine the male chosen by the current focal female
-    chosenMale<-fChoice$choice[p]
+    chosenMale <- fChoice$choice[p]
     
     #Determine the female chosen by the focal female's choice
-    chosenFemale<-mChoice$choice[chosenMale]
+    chosenFemale <- mChoice$choice[chosenMale]
     
     #If the chosen female is the focal female...
-    if(chosenFemale==p){
+    if (chosenFemale == p) {
       #Pair the male and female together
-      pairs<-rbind(pairs,cbind(females[p,],males[chosenMale,]))
+      pairs <- rbind(pairs, cbind(females[p, ], males[chosenMale, ]))
     }
     
     #Otherwise do nothing
@@ -194,10 +208,12 @@ mateChoice<-function(females,males,prefs){
   }
   
   #Remove the row of NAs from the pairs dataframe
-  pairs<-pairs[-1,]
-
+  pairs <- pairs[-1, ]
+  
   #Calculate simulation accuracy
-  acc<-mean(pairs[match(trueRels[,1],pairs[,2]),44]==trueRels[,2],na.rm=T)
+  acc <-
+    mean(pairs[match(trueRels[, 1], pairs[, 2]), 44] == trueRels[, 2], na.rm =
+           T)
   
   #Output simulation accuracy
   return(acc)
@@ -208,7 +224,12 @@ mateChoice<-function(females,males,prefs){
 
 #Improved Sampling#
 #A sample function that will return a single scalar if given it
-resample <- function(x,...){if(length(x)==1) x else sample(x,...)}
+resample <- function(x, ...) {
+  if (length(x) == 1)
+    x
+  else
+    sample(x, ...)
+}
 
 ```
 
@@ -220,37 +241,36 @@ resample <- function(x,...){if(length(x)==1) x else sample(x,...)}
 
 ```{r analysis}
 
-#Create a vector to store the number of times a preference appeared in a winning set
-prefRecord <- rep(0, 16)
-
 #Load the dataframe to store accuracy as a function of preference set
 accRecord <- read.csv(mrPath)
 
 #Create a variable to track number of loops completed so far
-l<-max(c(0,accRecord$loop),na.rm=T)
+l <- max(c(0, accRecord$loop), na.rm = T)
 
 #Determine which preferences to start with
 startPrefs <- sample(1:16, numPrefs)
 
+#Remove any rows of NAs
+accRecord <- accRecord[rowSums(is.na(accRecord)) < 13,]
+
 #As long as there are still loops to complete...
-while (sum(rowSums(is.na(accRecord))<13) < loops) {
+while (nrow(accRecord) < loops) {
   
   #Update loop number
-  l<-l+1
+  l <- l + 1
   
   #Choose a new set of participants each time to avoid overfitting
-  samp<-sample(unique(data$CIN),n)
+  samp <- sample(unique(data$CIN), n)
   
   #Separate males and females
-  males <- data[data$sex == 1 & data$CIN %in% samp, ]
-  females <- data[data$sex == 0 & data$CIN %in% samp, ]
+  males <- data[data$sex == 1 & data$CIN %in% samp,]
+  females <- data[data$sex == 0 & data$CIN %in% samp,]
   
   #Compute accuracy for this starting set of preferences
   startAcc <- mateChoice(females, males, startPrefs)
   
-  #Randomly change one preference from the starting set to make the testing set
-  testPrefs <- startPrefs
-  testPrefs[sample(1:length(testPrefs), 1)] <- sample((1:16)[-testPrefs], 1)
+  #Randomly change the tested preference vector
+  testPrefs <- sample(1:16, numPrefs)
   
   #Compute accuracy for the test set
   testAcc <- mateChoice(females, males, testPrefs)
@@ -259,23 +279,37 @@ while (sum(rowSums(is.na(accRecord))<13) < loops) {
   accRatio <- testAcc / startAcc
   
   #If the new set is better, switch startPrefs to the test set
-  #Otherwise, switch with a 5% chance to avoid local optima
-  if (accRatio > 1 | rbinom(1, 1, .05)) {
+  if (accRatio > 1) {
     #Switch to the new set
     startPrefs <- testPrefs
     startAcc <- testAcc
     
   }
   
-  #Record which preferences won this competition
-  prefRecord[startPrefs] <- prefRecord[startPrefs] + 1
+  
+  #Store the results of this model loop
+  loopResults <-
+    data.frame(t(c(
+      l, numPrefs, rep(0, 16), round(startAcc * 100, 2)
+    )))
+  
+  colnames(loopResults) <- colnames(accRecord)
+  
+  #Store which preferences won on this trial
+  loopResults[startPrefs + 2] <- 1
   
   #Store the current winning preferences and accuracy
-  accRecord <- rbind(accRecord,
-    c(l, numPrefs,prefNames[sort(startPrefs)], round(startAcc * 100, 2)))
-    
-  #Save winning preferences and accuracy
-  write.table(accRecord[nrow(accRecord),],file=mrPath,append=T,sep=",",row.names=F,col.names=F)
+  accRecord <- rbind(accRecord, loopResults)
+  
+  #Save winning preferences and accuracy to file
+  write.table(
+    accRecord[nrow(accRecord),],
+    file = mrPath,
+    append = T,
+    sep = ",",
+    row.names = F,
+    col.names = F
+  )
   
 }
 
@@ -284,32 +318,41 @@ while (sum(rowSums(is.na(accRecord))<13) < loops) {
 
 ```{r plotting}
 
+#Load model results dataframe
+accRecord <- read.csv(mrPath)
+
+#Remove any NAs
+accRecord <- accRecord[rowSums(is.na(accRecord)) < 13,]
+
+
+
 #Plot simulation accuracy across model loops
-accPlot<-ggplot(data=accRecord,aes(x=loop,y=acc,group=1))+
-  labs(x="Loop",y="Simulation Accuracy")+
-  geom_line(color="dodgerblue3",lwd=1.5)+
-  geom_point(color="black",size=1)+
-  theme_grey(base_size=25)
+accPlot <- ggplot(data = accRecord, aes(x = loop, y = acc)) +
+  labs(x = "Loop", y = "Simulation Accuracy") +
+  geom_smooth(color = "dodgerblue3", lwd = 1.5) +
+  theme_grey(base_size = 25)
 
 
 
 #Create a new version of prefNames that will plot age at the end
-prefNamesPlot<-factor(prefNames,levels=prefNames)
+prefNamesPlot <- factor(prefNames, levels = prefNames)
+
+#Determine how many times each preference was included in the set
+prefRecord <- colSums(accRecord[, 3:18])
 
 #Plot number of victories as a function of preference
-winPlot<-ggplot(data=data.frame(prefRecord),
-                aes(x=prefNamesPlot,
-                    y=prefRecord,
-                    fill=prefNamesPlot))+
-  geom_bar(stat="identity")+
-  labs(x="Preferences",y="# of Victories")+
-  theme_grey(base_size=25)+
-  theme(legend.position="none",
-        axis.text.x=element_text(angle=90,
-                                 vjust=0.5,
-                                 hjust=1))
-  
-
-
+winPlot <- ggplot(data = data.frame(prefRecord),
+                  aes(x = prefNamesPlot,
+                      y = prefRecord,
+                      fill = prefNamesPlot)) +
+  geom_bar(stat = "identity") +
+  labs(x = "Preferences", y = "# of Victories") +
+  theme_grey(base_size = 25) +
+  theme(legend.position = "none",
+        axis.text.x = element_text(
+          angle = 90,
+          vjust = 0.5,
+          hjust = 1
+        ))
 
 ```
