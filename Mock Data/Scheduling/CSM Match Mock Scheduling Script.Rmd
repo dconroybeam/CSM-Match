@@ -1,0 +1,333 @@
+---
+title: "CSM-Match Scheduling Script"
+author: "Dan Conroy-Beam"
+date: "`r Sys.Date()`"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r packages}
+library(reshape2)
+```
+
+
+
+## RA Data
+```{r raLoad}
+
+#Load in the column names
+raHeader<-read.csv("Human Data/Scheduling/Mock Data/Mock RA Scheduling Data 20230828.csv",nrows=1,header=F)
+
+#Load in the data
+ra<-read.csv("Human Data/Scheduling/Mock Data/Mock RA Scheduling Data 20230828.csv",skip=3,header=F)
+
+#Label columns
+colnames(ra)<-raHeader
+
+#Remove unnecessary columns
+ra<-ra[,-c(1:17)]
+
+#Extract all time slots
+times<-gsub("_1","",colnames(ra)[seq(3,114,7)])
+times<-gsub("avail","",times)
+
+#Relabel timeslot columns more intuitively
+colnames(ra)[-c(1:2)]<-paste0(c("m","t","w","th","f","s","su"),rep(times,each=7))
+
+
+```
+
+
+
+## Participant Data
+
+```{r participantLoad}
+
+#Load in the column names
+participantHeader<-read.csv("Human Data/Scheduling/Mock Data/Mock Participant Scheduling Data 20230828.csv",nrows=1,header=F)
+
+#Load in the participant data
+participant<-read.csv("Human Data/Scheduling/Mock Data/Mock Participant Scheduling Data 20230828.csv",skip=3,header=F)
+
+#Label columns
+colnames(participant)<-participantHeader
+
+#Remove unnecessary columns
+participant<-participant[,-c(1:17)]
+
+#Create a dummy PIN variable
+participant$PIN<-c(sample(1:50),sample(51:100))
+
+participant$sex<-rep(c(0,1),each=50)
+
+#Create a dummy match variable
+participant$match<-c(sample(51:100),rep(0,50))
+participant$match[51:100]<-participant$PIN[match(participant$PIN[51:100],participant$match[1:50])]
+
+#Rearrange
+participant<-participant[,c(113:115,1:112)]
+
+#Relabel timeslot columns more intuitively
+colnames(participant)[-(1:3)]<-paste0(c("m","t","w","th","f","s","su"),rep(times,each=7))
+```
+
+
+
+## Determine RA Scheduling Blocks
+
+```{r raBlock}
+
+#Melt RA dataframe
+ra<-melt(ra,id.vars=c("name","email"),
+         variable.name="time",
+         value.name="avail")
+
+#Re-arrange levels of the time variable
+ra$time<-factor(ra$time,levels=unique(ra$time)[sapply(1:7,function(x) seq(x,112,7))])
+
+#Re-arrange dataset
+ra<-ra[order(ra$name,ra$time),]
+
+#Set NAs to 0
+ra$avail[is.na(ra$avail)]<-0
+
+#Create a variable to track blocks of time people are available
+#A block is 1 consecutive hour of available time
+ra$block<-0
+
+for(t in 1:nrow(ra)){
+  ra$block[t]<-ifelse(ra$avail[t]==1 & 
+                        (ra$avail[t+1]==1 & 
+                           ra$name[t+1] == ra$name[t] &
+                           substr(ra$time[t+1],1,1) == substr(ra$time[t],1,1)),1,0)
+}
+
+#Change any NAs to 0
+ra$block[is.na(ra$block)]<-0
+```
+
+
+
+## Determine Participant Scheduling Blocks
+
+```{r raBlock}
+
+#Melt participant dataframe
+participant<-melt(participant,id.vars=c("PIN","match","sex"),
+         variable.name="time",
+         value.name="avail")
+
+#Re-arrange levels of the time variable
+participant$time<-factor(participant$time,levels=unique(participant$time)[sapply(1:7,function(x) seq(x,112,7))])
+
+#Re-arrange dataset
+participant<-participant[order(participant$PIN,participant$time),]
+
+#Set NAs to 0
+participant$avail[is.na(participant$avail)]<-0
+
+#Create a variable to track blocks of time people are available
+#A block is 1 consecutive hour of available time
+participant$block<-0
+
+for(t in 1:nrow(participant)){
+  participant$block[t]<-ifelse(participant$avail[t]==1 &
+                                 (participant$avail[t+1]==1 & 
+                                    participant$PIN[t+1] == participant$PIN[t] &
+                           substr(participant$time[t+1],1,1) == substr(participant$time[t],1,1)),1,0)
+}
+
+#Change any NAs to 0
+participant$block[is.na(participant$block)]<-0
+
+```
+
+
+## Limit Blocks by RA
+
+Limit to blocks in which at least one RA is available
+
+```{r limitParticipants}
+
+#Create a blank matrix to store valid time blocks
+pBlocks<-participant
+
+pBlocks<-cbind(pBlocks,matrix(0,nrow(pBlocks),length(unique(ra$name))))
+
+#Loop through blocks...
+for (b in 1:nrow(pBlocks)) {
+  #If an RA is available in that block...
+  if (sum(pBlocks$block[b] * ra$block[ra$time == pBlocks$time[b]])>0) {
+    #Retain it and label which RAs are available
+    
+    pBlocks[b, 7:11] <- ra$block[ra$time == pBlocks$time[b]]
+    
+  } else {
+    #Otherwise, blank out the row
+    pBlocks[b,] <- NA
+    
+  }
+  
+}
+
+#Label columns
+colnames(pBlocks)<-c(colnames(participant),stringr::word(unique(ra$name),1))
+
+#Remove all blocks that did not have a viable match
+pBlocks<-pBlocks[complete.cases(pBlocks),]
+
+```
+
+
+## Limit Blocks by Match
+
+Limit to blocks of time when Ps are available with their match and an RA
+
+```{r limitBlocks}
+
+pBlocksMatch<-pBlocks
+
+#Add a vector reflecting co-availability of the mate
+pBlocksMatch$matchAvail<-0
+
+#Loop through blocks
+for(i in 1:nrow(pBlocksMatch)){
+  
+  #Identify the match's blocks for this block
+  matchBlocks<-pBlocksMatch[pBlocksMatch$PIN==pBlocksMatch$match[i],]
+  
+  #Determine if this block is in the match's blocks
+  pBlocksMatch$matchAvail[i]<-pBlocksMatch$time[i] %in% matchBlocks$time
+  
+}
+
+#Limit only to blocks where both participants are available
+pBlocksMatch<-pBlocksMatch[pBlocksMatch$matchAvail==1,]
+
+pBlocksMatch$condition="match"
+
+```
+
+
+## Random matches
+
+```{r randomMatches}
+
+#Create a vector of male PINs
+malePINs<-unique(pBlocksMatch$PIN[pBlocksMatch$sex==1])
+
+#Create a copy of the pBlocks dataframe for random matches
+pBlocksRand<-pBlocks
+
+#Loop through females...
+for(i in unique(pBlocksMatch$PIN[pBlocksMatch$sex==0])){
+  
+  #Pull out the focal female
+  focalBlocks<-pBlocks[pBlocks$PIN==i,]
+  
+  #Create a variable to determine whether she's been matched
+  matched<-0
+  
+  #Create a variable to track the number of pair attempts
+  attempts<-0
+  
+  if (length(malePINs) > 1) {
+    
+    #As long as she is unmatched...
+    while (matched == 0) {
+      
+      attempts<-attempts+1
+      
+      #Temporarily pair this female with a random available male
+      matchTest <- sample(malePINs[malePINs != focalBlocks$match[1]], 1)
+      
+      #Find the timeslots this mate is available
+      matchBlocks <- pBlocks[pBlocks$PIN == matchTest, ]
+      
+      #If the two are jointly available at least once...
+      if (sum(sapply(focalBlocks$time, function(x)
+        x %in% matchBlocks$time)) > 0) {
+        #Note that they have been matched
+        matched <- 1
+        
+        #Remove this male from the possible matches
+        malePINs <- malePINs[malePINs != matchTest]
+        
+        #And add his PIN to the blocks dataframe
+        pBlocksRand$match[pBlocksRand$PIN == i] <- matchTest
+      } else if(attempts>15){
+        break
+      }
+      
+    }
+    
+  } else {
+    pBlocksRand$match[pBlocksRand$PIN == i] <- malePINs
+  }
+  
+}
+
+#Pair males with their new random matches
+for(i in 1:nrow(pBlocksRand)){
+  if(pBlocksRand$sex[i]==1){
+    pBlocksRand$match[i]<-pBlocksRand$PIN[pBlocksRand$match==pBlocksRand$PIN[i]][1]
+  }
+}
+
+
+#Add a vector reflecting co-availability of the random mate
+pBlocksRand$matchAvail<-0
+
+#Loop through blocks
+for(i in 1:nrow(pBlocksRand)){
+  
+  #Identify the random match's blocks for this block
+  matchBlocks<-pBlocksRand[pBlocksRand$PIN==pBlocksRand$match[i],]
+  
+  #Determine if the focal block is in the random match's blocks
+  pBlocksRand$matchAvail[i]<-pBlocksRand$time[i] %in% matchBlocks$time
+  
+}
+
+#Limit only to blocks where both participants are available
+pBlocksRand<-pBlocksRand[pBlocksRand$matchAvail==1,]
+
+pBlocksRand$condition<-"rand"
+
+```
+
+
+
+# Final Scheduling  
+
+Compile all schedule information into a final scheduling spreadsheet
+
+```{r}
+
+#Isolate all female PINs
+femalePINs<-unique(participant$PIN[participant$sex==0])
+
+condition<-sapply(femalePINs,function(x) 
+  ifelse(x %in% pBlocksMatch$PIN & x %in% pBlocksRand$PIN,
+         sample(c("match","rand"),1),
+         ifelse(x %in% pBlocksMatch$PIN,"match","rand"))
+  )
+
+pBlocks<-pBlocksMatch[-(1:nrow(pBlocksMatch)),]
+
+for(p in 1:length(femalePINs)){
+  if(condition[p]=="match"){
+    pBlocks<-rbind(pBlocks,pBlocksMatch[pBlocksMatch$PIN==femalePINs[p],])
+  } else {
+    pBlocks<-rbind(pBlocks,pBlocksRand[pBlocksRand$PIN==femalePINs[p],])
+
+  }
+}
+
+```
+
