@@ -23,8 +23,8 @@ library(reshape2)
 ```{r parameters}
 
 #Links to the two versions of the Qualtrics survey. One for random matches and the other for model matches
-randLink<-"ucsb.qualtrics.com/rand?"
-matchLink<-"ucsb.qualtrics.com/match?"
+randLink<-"ucsb.qualtrics.com/test?cond=s&id="
+matchLink<-"ucsb.qualtrics.com/test?cond=r&id="
 
 ```
 
