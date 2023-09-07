@@ -332,5 +332,17 @@ scheduleSheet<-scheduleSheet[order(scheduleSheet$PINrand,scheduleSheet$rand),]
 #Remove randomizing variables
 scheduleSheet<-scheduleSheet[,-tail(1:ncol(scheduleSheet),2)]
 
+#Add in additional scheduling columns
+scheduleSheet<-cbind(scheduleSheet,data.frame("contacted"="N",
+                                              "contactedBy"="Your Name Here",
+                                              "scheduled"="N",
+                                              "scheduledBy"="Your Name Here",
+                                              "sessionDate"="Session Date Here",
+                                              "sessionTime"="Session Time Here",
+                                              "sessionRA"="Your Name Here"))
+
+#Rearrange
+scheduleSheet<-scheduleSheet[,c(1:6,113:119,7:112)]
+
 ```
 
