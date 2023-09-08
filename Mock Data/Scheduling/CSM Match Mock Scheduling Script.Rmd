@@ -339,10 +339,11 @@ scheduleSheet<-cbind(scheduleSheet,data.frame("contacted"="N",
                                               "scheduledBy"="Your Name Here",
                                               "sessionDate"="Session Date Here",
                                               "sessionTime"="Session Time Here",
-                                              "sessionRA"="Your Name Here"))
+                                              "sessionRA"="Your Name Here",
+                                              "sessionCompleted"="N"))
 
 #Rearrange
-scheduleSheet<-scheduleSheet[,c(1:6,113:119,7:112)]
+scheduleSheet<-scheduleSheet[,c(1:6,113:120,7:112)]
 
 ```
 
