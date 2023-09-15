@@ -1,6 +1,6 @@
 #Create a dataframe with participant information
 pData<-data.frame("PIN"=c(sample(1:50),sample(51:100)),
-                  "sex"=rep(c(0,1),each=50))
+                  "sex"=rep(c(0,1),each=50),"firstName"=paste0(sample(letters,5),collapse=""))
 
 #Create a dummy match variable
 pData$match<-c(sample(51:100),rep(0,50))
