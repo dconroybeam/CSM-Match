@@ -53,7 +53,7 @@ mvCalc <- function(ideal,
   #Calculates Euclidean distance between preferences and traits
   #Transforms this distance such that positive values are more attractive
   mv <- apply(traits, 1, function(x)
-    sum((ideal - x) ^ 2))
+    sum((as.numeric(ideal) - x) ^ 2))
   
   
   
