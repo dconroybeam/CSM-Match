@@ -1,7 +1,10 @@
 ```{r loadData}
 
 #Load the data
-data<-read.csv("human-data/processed-data/CSM-Match-matching-data.csv")
+data<-read.csv("human-data/processed-data/CSM-Match-matching-data-S24.csv")
+
+#Recode DQs to 0 or 1 rather than 1 or NA
+data[,c(20:52)]<-ifelse(is.na(data[,c(20:52)]),0,1)
 
 ```
 
@@ -22,29 +25,31 @@ nobs<-30*nrow(data)/2
 
 ```{r functions}
 
-
-
 #MV calculation#
 mvCalc <- function(ideal,
                    ageDq,
                    raceDq,
                    religionDq,
                    politicsDq,
+                   intDQ,
                    traits,
                    age,
                    race,
                    religion,
-                   politics) {
+                   politics,
+                   int) {
   #ideal is ideal preferences
   #ageDq is age disqualifiers
   #raceDq is race disqualifiers
   #religionDq is religion disqualifiers
   #politicsDq is politics disqualifiers
+  #intDQ is international student status disqualifiers
   #traits is actual trait values
   #age is age of the participant
   #race is participants' race/ethnicity
   #religion is participants' religion
   #politics is participants' politics
+  #int is internatioanl student status
   
   
   
@@ -100,12 +105,25 @@ mvCalc <- function(ideal,
     ifelse(x %in% which(politicsDq == 1), 0, 2))
   
   
+  #International status
+  intDqMv <- sapply(int, function(x)
+    ifelse((x == 0 & intDQ[1]==1) | 
+             (x ==1 & intDQ[2]==1),
+           2,0
+    )
+  )
+  
+  
   #Add DQs to mv total and compute distance
-  mv <- sqrt(mv + ageDqMV ^ 2 + raceDqMV ^ 2 + religionDqMV ^ 2 + politicsDqMV ^
-               2)
+  mv <- sqrt(mv +
+               ageDqMV ^ 2 +
+               raceDqMV ^ 2 +
+               religionDqMV ^ 2 +
+               politicsDqMV ^ 2 +
+               intDqMv ^ 2)
   
   #Compute MV including preferences and disqualifiers
-  mv <- (-1 * mv + sqrt(10 ^ 2 * 19)) / sqrt(10 ^ 2 * 19)
+  mv <- (-1 * mv + sqrt(10 ^ 2 * 20)) / sqrt(10 ^ 2 * 20)
   
   return(mv)
   
@@ -133,38 +151,52 @@ mateChoice <- function(data) {
   females <- data[data$sex == 0, ]
   males <- data[data$sex == 1, ]
   
+  #Determine how many participants we have of each sex
+  nFemales<-nrow(females)
+  nMales<-nrow(males)
+  
+  #Randomly sample from the more numerous sex to avoid sex ratio bias issues
+  if(nFemales>nMales){
+    females<-females[sample(1:nrow(females),nMales,replace=F),]
+  } else {
+    males<-males[sample(1:nrow(males),nFemales,replace=F),]
+  }
   
   ###MV Calculation###
   
   #Males
   #Calculate the mate value of each female to each male given starting preferences
   maleMvMatrix <- t(apply(males, 1, function(x)
-    mvCalc(x[45:59],
-           x[29:35],
-           x[4:9],
-           x[10:21],
-           x[22:28],
-           females[,60:74],
-           females[,3],
-           females[,36:41],
-           females[,43],
-           females[,44])))
+    mvCalc(x[53:67],
+           x[27:33],
+           x[34:39],
+           x[40:50],
+           x[20:26],
+           x[51:52],
+           females[,68:82],
+           females[,2],
+           females[,10:15],
+           females[,17],
+           females[,18],
+           females[,19])))
   
   
   
   #Females
   #Calculate the mate value of each male to each female given starting preferences
   femaleMvMatrix <- t(apply(females, 1, function(x)
-    mvCalc(x[45:59],
-           x[29:35],
-           x[4:9],
-           x[10:21],
-           x[22:28],
-           males[,60:74],
-           males[,3],
-           males[,36:41],
-           males[,43],
-           males[,44])))
+    mvCalc(x[53:67],
+           x[27:33],
+           x[34:39],
+           x[40:50],
+           x[20:26],
+           x[51:52],
+           males[,68:82],
+           males[,2],
+           males[,10:15],
+           males[,17],
+           males[,18],
+           males[,19])))
   
   
   
@@ -242,6 +274,8 @@ mateChoice <- function(data) {
 ```{r analysis}
 
 dataMatched<-mateChoice(data)
+
+dataMatched<-dataMatched[complete.cases(dataMatched$mPIN),]
 
 ```
 

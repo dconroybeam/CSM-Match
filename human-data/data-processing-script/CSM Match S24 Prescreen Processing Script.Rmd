@@ -1,0 +1,113 @@
+```{r load}
+
+#Load the raw matching data
+data<-read.csv("human-data/raw-data/CSM Match S24 Prescreen Data Raw.csv")
+
+```
+
+
+
+```{r trim}
+
+#Remove unnecessary columns
+data<-data[,-c(1:17)]
+
+#Remove people who aren't interested in pursuing long-term relationships
+data<-subset(data,data$ltmInterest==1)
+
+#Remove anyone who is not a UCSB undergrad
+data<-subset(data,data$student==1)
+
+#Limit to opposite-sex attracted participants
+data<-subset(data,data$sex_orient %in% c(1,3))
+
+#Remove the LTM interest column
+data<-data[,-10]
+
+#Remove the student column
+data<-data[,-1]
+
+```
+
+
+
+```{r composites}
+
+#Pull out ideal ratings
+ideals<-data[,52:81]
+
+#Pull out self ratings
+self<-data[,82:111]
+
+#Put ratings on a 0-10 scale
+ideals<-ideals-1
+self<-self-1
+
+#Calculate ideal composites
+idealComp<-sapply(seq(1,30,2),function(x)
+  rowMeans(ideals[,(x:(x+1))],na.rm=T)
+  )
+
+#Calculate self rating composites
+selfComp<-sapply(seq(1,30,2),function(x)
+  rowMeans(self[,(x:(x+1))],na.rm=T)
+  )
+
+#Label
+colnames(idealComp)<-gsub(1,"Comp",colnames(ideals)[seq(1,30,2)])
+colnames(selfComp)<-gsub(1,"Comp",colnames(self)[seq(1,30,2)])
+
+```
+
+
+
+```{r incorporate}
+
+#Drop individual ratings and rearrange
+data<-data[,c(112,1:51)]
+
+#Incorporate composite ratings
+data<-cbind(data,idealComp,selfComp)
+
+```
+
+
+
+```{r rename}
+
+#Relabel columns
+colnames(data)[c(1:52)]<-c("PIN",
+                  "age",
+                  "sex",
+                  "sexOrient",
+                  "sexOrientText",
+                  "gender",
+                  "genderText",
+                  "relStat",
+                  "relStatText",
+                  paste0("race",c("AAPI","Black","Latinx","NAAI","MENA","White","NA")),
+                  "religion",
+                  "politics",
+                  "international",
+                  paste0("poliDQ",c("VC","MC","SC","Cent","SL","ML","VL")),
+                  paste0("ageDQ",c(18:22,"23_25","26plus")),
+                  paste0("raceDQ",c("AAPI","Black","Latinx","NAAI","MENA","White")),
+                  paste0("religionDQ",1:11),
+                  paste0("internationalDQ",c("Dom","Int"))
+                  )
+
+```
+
+
+
+```{r save}
+
+#Remove people who did not respond to either self or ideal ratings
+data<-data[rowSums(is.na(selfComp))<15 & rowSums(is.na(idealComp))<15,]
+
+#Save data
+write.csv(data,"human-data/processed-data/CSM-Match-matching-data-S24.csv",
+          row.names=F)
+
+```
+
