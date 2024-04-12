@@ -3,6 +3,9 @@
 #Load the raw matching data
 data<-read.csv("human-data/raw-data/CSM Match S24 Prescreen Data Raw.csv")
 
+#Load in PINS of people who completed the scheduling survey
+sPINs<-read.csv("human-data/raw-data/CSM Match S24 Scheduling Data PINs.csv")
+
 ```
 
 
@@ -20,6 +23,9 @@ data<-subset(data,data$student==1)
 
 #Limit to opposite-sex attracted participants
 data<-subset(data,data$sex_orient %in% c(1,3))
+
+#Limit to people who completed the scheduling survey
+data<-subset(data,data$p %in% sPINs$p)
 
 #Remove the LTM interest column
 data<-data[,-10]
