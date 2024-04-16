@@ -1,4 +1,6 @@
 ```{r loadData}
+#Set seed
+set.seed(20240416)
 
 #Load the data
 data<-read.csv("human-data/processed-data/CSM-Match-matching-data-S24.csv")
@@ -161,7 +163,7 @@ mateChoice <- function(data) {
   } else {
     males<-males[sample(1:nrow(males),nFemales,replace=F),]
   }
-  
+
   ###MV Calculation###
   
   #Males
