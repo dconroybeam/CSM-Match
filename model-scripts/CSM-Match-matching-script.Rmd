@@ -1,9 +1,9 @@
 ```{r loadData}
 #Set seed
-set.seed(20240416)
+set.seed(20241015)
 
 #Load the data
-data<-read.csv("human-data/processed-data/CSM-Match-matching-data-S24.csv")
+data<-read.csv("human-data/processed-data/CSM-Match-matching-data-F24.csv")
 
 #Recode DQs to 0 or 1 rather than 1 or NA
 data[,c(20:52)]<-ifelse(is.na(data[,c(20:52)]),0,1)
@@ -77,9 +77,9 @@ mvCalc <- function(ideal,
     ifelse(x >= 26, 7, ifelse(x >= 23 & x <= 25, 6,
                               ageCat$cat[match(x, ageCat$age)])))
   
-  #Determine MV points each potential mate should receive based on age
-  ageDqMV <- sapply(selfAge, function(x)
-    ifelse(x %in% which(ageDq == 1), 0, 2))
+  #Determine whether each potential mate meets the agent's DQ disqualifier
+  ageDq <- sapply(selfAge, function(x)
+    ifelse(x %in% which(ageDq == 1), 1, 0))
   
   
   
@@ -108,24 +108,25 @@ mvCalc <- function(ideal,
   
   
   #International status
-  intDqMv <- sapply(int, function(x)
+  intDq <- sapply(int, function(x)
     ifelse((x == 0 & intDQ[1]==1) | 
              (x ==1 & intDQ[2]==1),
-           2,0
+           1,0
     )
   )
   
   
   #Add DQs to mv total and compute distance
   mv <- sqrt(mv +
-               ageDqMV ^ 2 +
                raceDqMV ^ 2 +
                religionDqMV ^ 2 +
-               politicsDqMV ^ 2 +
-               intDqMv ^ 2)
+               politicsDqMV ^ 2)
   
   #Compute MV including preferences and disqualifiers
-  mv <- (-1 * mv + sqrt(10 ^ 2 * 20)) / sqrt(10 ^ 2 * 20)
+  mv <- (-1 * mv + sqrt(10 ^ 2 * 18)) / sqrt(10 ^ 2 * 18)
+  
+  #Zero out MV for potential mates who do not meet age or international status DQs
+  mv <- mv * ageDq * intDq
   
   return(mv)
   
