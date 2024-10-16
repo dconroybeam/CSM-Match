@@ -158,13 +158,6 @@ mateChoice <- function(data) {
   nFemales<-nrow(females)
   nMales<-nrow(males)
   
-  #Randomly sample from the more numerous sex to avoid sex ratio bias issues
-  if(nFemales>nMales){
-    females<-females[sample(1:nrow(females),nMales,replace=F),]
-  } else {
-    males<-males[sample(1:nrow(males),nFemales,replace=F),]
-  }
-
   ###MV Calculation###
   
   #Males
