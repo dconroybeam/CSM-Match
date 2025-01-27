@@ -1,9 +1,9 @@
 ```{r loadData}
 #Set seed
-set.seed(20241015)
+set.seed(20250126)
 
 #Load the data
-data<-read.csv("human-data/processed-data/CSM-Match-matching-data-F24.csv")
+data<-read.csv("human-data/processed-data/CSM-Match-matching-data-W25.csv")
 
 #Recode DQs to 0 or 1 rather than 1 or NA
 data[,c(20:52)]<-ifelse(is.na(data[,c(20:52)]),0,1)
