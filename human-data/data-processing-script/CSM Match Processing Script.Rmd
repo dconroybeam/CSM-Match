@@ -1,0 +1,143 @@
+---
+title: "CSM-Match Processing Script"
+author: "Ashley J. Coventry, Daniel Conroy-Beam"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Packages
+
+```{r packages}
+library(dplyr)
+
+```
+
+
+
+```{r loading data}
+
+#load in post-date data
+data <- read.csv('human-data/raw-data/CSM Match Post-Date Raw 041625.csv')
+
+#load in prescreen data
+matchDataF <- read.csv('human-data/processed-data/CSM-Match-matching-data-F24.csv')
+
+matchDataW <- read.csv('human-data/processed-data/CSM-Match-matching-data-W25.csv')
+
+```
+
+```{r processing}
+
+#remove title rows
+data <- data[-c(1:2),]
+
+#remove participants outside of fall and winter (based on start date)
+data <- data %>%
+  mutate(StartDate = as.POSIXct(StartDate, format = "%Y-%m-%d %H:%M:%S")) %>%
+  filter(StartDate >= as.POSIXct("2024-09-22 00:00:00"))
+
+
+#add in "quarter" column
+data$quarter <- ifelse(data$StartDate <= as.POSIXct("2025-01-06 00:00:00"), "fall", "winter")
+
+matchDataF$quarter <- "fall"
+matchDataW$quarter <- "winter"
+matchDataComplete <- rbind(matchDataF, matchDataW)
+
+#RAs accidentally used same PIN_mPIN string for both dates, so checking for duplicate date IDs
+#get row of duplicates
+dupIndices <- which(duplicated(data$p) | duplicated(data$p, fromLast = TRUE))
+
+#manually compared date and time of dates for each of these rows; replace incorrect pin with correct one
+
+#f24617278_f24848147 --> f24617278_f24480688
+data[371,128] <- "f24617278_f24480688"
+
+#f24677880_f24173430 -->f24677880_f2458021
+data[63,128] <- "f24677880_f2458021"
+
+
+#delete empty rows (participant opened survey twice, only completed one tab) & test row (row 275)
+data <- data[-c(83, 264, 275),]
+
+
+#remove unnecessary columns
+data <- data[18:129]
+
+
+#make all relevant columns numeric
+data <- data %>%
+  mutate(across(c(1, 3:101, 106:108), ~ as.numeric(as.character(.))))
+
+
+#make post-date preference,ideals, own ratings 0-10 scale
+data[,c(4:93)] <- data[,c(4:93)] - 1
+
+
+#extract PINs
+data$PIN<-sapply(data$p,function(x)
+  strsplit(x,"_")[[1]][1]
+  )
+
+data$mPIN<-sapply(data$p,function(x)
+  strsplit(x,"_")[[1]][2]
+)
+
+
+
+#make composites of ideals, prefs, and mate actuals in post-date data
+
+mate<-data[,4:33]
+self<-data[,34:63]
+ideals <- data[,64:93]
+
+#actual mate composites
+mateComp <- sapply(seq(1,30,2),function(x)
+  rowMeans(mate[,(x:(x+1))],na.rm=T)
+  )
+colnames(mateComp)<-gsub(1,"Comp",colnames(mate)[seq(1,30,2)])
+
+#ideal composites
+idealComp<-sapply(seq(1,30,2),function(x)
+  rowMeans(ideals[,(x:(x+1))],na.rm=T)
+  )
+colnames(idealComp)<-gsub(1,"Comp",colnames(ideals)[seq(1,30,2)])
+
+#self composites
+selfComp<-sapply(seq(1,30,2),function(x)
+  rowMeans(self[,(x:(x+1))],na.rm=T)
+  )
+colnames(selfComp)<-gsub(1,"Comp",colnames(self)[seq(1,30,2)])
+
+#add comps to post-date data frame
+data<-cbind(data, mateComp, selfComp, idealComp)
+
+
+#rearrange data so participants' self ratings
+#issue: each person potentially appears more than once // this will grab just theri first appearance
+partnerRatings<-as.data.frame(selfComp[match(data$mPIN,data$PIN),])
+colnames(partnerRatings)<-gsub("self","mate",names(partnerRatings))
+
+#Add partner ratings to same line as corresponding participant
+data<-cbind(data,partnerRatings) #partnerRatings = partner's ratings of themselves
+
+```
+
+
+```{r save data}
+
+#post date data
+write.csv(data,"human-data/processed-data/postDateProcessed 041825.csv",
+          row.names=F)
+
+#match data
+write.csv(matchDataComplete,"human-data/processed-data/matchDataProcessed 041825.csv",
+          row.names=F)
+
+```
+
+

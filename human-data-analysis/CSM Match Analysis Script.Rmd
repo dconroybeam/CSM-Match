@@ -1,0 +1,22 @@
+---
+title: "CSM Match Analysis Script"
+author: "Ashley J. Coventry, Daniel Conroy-Beam"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r packages}
+
+```
+
+```{r loading data}
+
+matchData <- read.csv('human-data/processed-data/matchDataProcessed 041825.csv')
+data <- read.csv('human-data/processed-data/postDateProcessed 041825.csv')
+
+```
+
