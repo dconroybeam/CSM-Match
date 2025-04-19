@@ -52,13 +52,15 @@ matchDataComplete <- rbind(matchDataF, matchDataW)
 #get row of duplicates
 dupIndices <- which(duplicated(data$p) | duplicated(data$p, fromLast = TRUE))
 
-#manually compared date and time of dates for each of these rows; replace incorrect pin with correct one
+#manually compared date and time of dates for each of these rows; replace incorrect pin & condition with correct one (pins and conditions both came from survey link)
 
 #f24617278_f24848147 --> f24617278_f24480688
 data[371,128] <- "f24617278_f24480688"
+data[371,127] <- "r"
 
 #f24677880_f24173430 -->f24677880_f2458021
 data[63,128] <- "f24677880_f2458021"
+data[63, 127] <- "s"
 
 
 #delete empty rows (participant opened survey twice, only completed one tab) & test row (row 275)
