@@ -93,15 +93,14 @@ attractionModel <- lmer(scale(ltAttraction) ~ c + (1|PIN) + (1|mPIN), data = dat
 secondDateModel <- lmer(scale(ltAttractionDate) ~ c + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
 
 
-contactExchangeModel <- glmer(contactExchange ~ c + (1|PIN) + (1|mPIN), data = dataComplete, family = binomial, 
-                              control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
-contactExchangePValue <- car::Anova(contactExchangeModel, type = 2)
-#checking convergence issues
+contactExchangeModel <- glmer(contactExchange ~ c + (1|PIN) + (1|mPIN),
+  data = dataComplete, family = binomial,
+  control = glmerControl(optimizer = "optimx", optCtrl = list(method = "nlminb", iter.max = 10000, eval.max = 10000)))
+  #need optimizer to fix convergence issue
 
-##tt <- getME(contactExchangeModel,"theta")
-##ll <- getME(contactExchangeModel,"lower")
-##min(tt[ll==0])
-#(nothing seems to be wrong RE singular fit/boundary variance)
+contactExchangePValue <- car::Anova(contactExchangeModel, type = 2)
+
+
 
 contactExchangeChisq <- chisq.test(table(dataComplete$c, dataComplete$contactExchange))
 
