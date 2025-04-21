@@ -10,13 +10,68 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r packages}
-
+library(dplyr)
+library(lmerTest)
+library(lme4) #for the glmer
+library(car) #for the p values from the glmer
 ```
 
 ```{r loading data}
 
 matchData <- read.csv('human-data/processed-data/matchDataProcessed 041825.csv')
 data <- read.csv('human-data/processed-data/postDateProcessed 041825.csv')
+
+```
+
+```{r descriptives}
+
+numDates <- nrow(data)
+
+numSubjects <- length(unique(data$PIN))
+
+numSubjectsTwoDates <- data %>%
+  count(PIN) %>%
+  filter(n == 2) %>%
+  summarise(num_twice = n())
+
+numSubjectsOneDate <- data %>%
+  count(PIN) %>%
+  filter(n == 1) %>%
+  summarise(num_once = n())
+
+numDatesByCondition <- table(data$c)
+
+attractionSummary <- summary(data$ltAttraction) #one NA? 
+histAttraction <- hist(data$ltAttraction)
+
+nextDateSummary <- summary(data$ltAttractionDate) #again one NA
+histNextDate <- hist(data$ltAttractionDate)
+
+tableExchange <- table(data$contactExchange, data$c)
+
+
+
+
+
+```
+
+
+```{r main predictions}
+
+attractionModel <- lmer(scale(ltAttraction) ~ c + (1|PIN) + (1|mPIN), data = data) #standardized outcome
+
+secondDateModel <- lmer(scale(ltAttractionDate) ~ c + (1|PIN) + (1|mPIN), data = data) #standardized outcome
+
+contactExchangeModel <- glmer(contactExchange ~ c + (1|PIN) + (1|mPIN), data = data, family = binomial)
+contactExchangePValue <- car::Anova(contactExchangeModel, type = 2)
+
+```
+
+```{r exploratory analyses}
+
+
+
+
 
 ```
 
