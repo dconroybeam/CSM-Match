@@ -14,7 +14,24 @@ library(dplyr)
 library(lmerTest)
 library(lme4) #for the glmer
 library(car) #for the p values from the glmer
+library(ggplot2)
+library(PairedData) #to test if variance in attractiveness ratings differs by condition
 ```
+
+```{r functions}
+#for computing euclidean distance
+
+mv<-function(ideal,traits){
+  
+  mv<-(-1*dist(rbind(ideal,traits))+sqrt(10^2*15))/sqrt(10^2*15)
+  
+  return(mv)
+  
+}
+
+```
+
+
 
 ```{r loading data}
 
@@ -58,19 +75,94 @@ tableExchange <- table(data$contactExchange, data$c)
 
 ```{r main predictions}
 
-attractionModel <- lmer(scale(ltAttraction) ~ c + (1|PIN) + (1|mPIN), data = data) #standardized outcome
+#make data frame with only people that completed 2 dates
+##column for number of dates
+data <- data %>% 
+  group_by(PIN) %>%
+  mutate(numDates = n()) %>%
+  ungroup()
+#only those who had two dates
+dataComplete <- data %>%
+  filter(numDates == 2)
 
-secondDateModel <- lmer(scale(ltAttractionDate) ~ c + (1|PIN) + (1|mPIN), data = data) #standardized outcome
 
-contactExchangeModel <- glmer(contactExchange ~ c + (1|PIN) + (1|mPIN), data = data, family = binomial)
+
+attractionModel <- lmer(scale(ltAttraction) ~ c + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
+
+
+secondDateModel <- lmer(scale(ltAttractionDate) ~ c + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
+
+
+contactExchangeModel <- glmer(contactExchange ~ c + (1|PIN) + (1|mPIN), data = dataComplete, family = binomial, 
+                              control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
 contactExchangePValue <- car::Anova(contactExchangeModel, type = 2)
+#checking convergence issues
+
+##tt <- getME(contactExchangeModel,"theta")
+##ll <- getME(contactExchangeModel,"lower")
+##min(tt[ll==0])
+#(nothing seems to be wrong RE singular fit/boundary variance)
+
+contactExchangeChisq <- chisq.test(table(dataComplete$c, dataComplete$contactExchange))
+
+###matrix plot
+
+#create matrix dataframe
+matrixDF <- data.frame(((table(dataComplete$c, dataComplete$contactExchange))/sum(table(dataComplete$c, dataComplete$contactExchange)))*100)
+
+#relabel column names
+colnames(matrixDF) <- c("condition", "contactExchange", "comboFrequency")
+
+#round all numbers to 2 decimal places
+matrixDF[,3] <-round(matrixDF[,3],2)
+
+#plot matrix
+matrixDFPlot <- ggplot(matrixDF, aes(x= condition, y = contactExchange, fill = comboFrequency)) +
+  geom_tile(color = "white") +
+  geom_text(label = matrixDF$comboFrequency)+
+  scale_fill_gradient(low = "white", high = "#009900", na.value = "whitesmoke") +
+  scale_x_discrete(labels = c('Matched','Random')) +
+  scale_y_discrete(labels = c('No','Yes')) +
+  labs(x = "Condition", y = "Contact Exchange", fill = "Combination Freq.") +
+  theme(text = element_text(size = 13))
+
 
 ```
 
 ```{r exploratory analyses}
 
+##calculate perception accuracy 
+
+#correlation between impressions of partner and date's self ratings
+colnamesTraits <- c("Affectionate", "Ambition", "Artistic", "Disposition", "Family", "Health", "Humor", "Intelligence", 
+                    "Kindness", "Parenting", "PhysAtt", "Religious", "Resources", "Sexiness", "Status")
+
+traitCors <- data.frame("trait" = colnamesTraits, 
+                        "cor" = round(diag(cor(dataComplete[,115:129],
+                                               dataComplete[,160:174],
+                                               use = "pairwise.complete.obs")), 3))
 
 
+#mate preference fulfillment based on impressions of partners (vs partner's actual self reported traits)
+dataComplete$prefMatch <- apply(dataComplete, 1, function(x)
+  mv(x[145:159], x[115:129])) #first is ideals, second is ratings of date
+
+tapply(dataComplete$prefMatch,list(dataComplete$c,dataComplete$sex),mean)
+
+
+
+#Exploratory Prediction 1: relationship between condition and romantic interest will be mediated by partner perception accuracy
+attractionModelPerceived <- lmer(scale(ltAttraction) ~ c + prefMatch + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
+
+
+#Exploratory Prediction 2: There will be more variance in romantic interest between participants in randomly assigned date partners relative to matched date partners. 
+
+varConditionR <- var(dataComplete$ltAttraction[dataComplete$c == "r"])
+
+varConditionS <- var(dataComplete$ltAttraction[dataComplete$c == "s"], na.rm = TRUE) #one NA case
+
+#to test if they are significantly different
+varTest <- var.test(dataComplete$ltAttraction[dataComplete$c == "r"], dataComplete$ltAttraction[dataComplete$c == "s"], paired = TRUE)
 
 
 ```
