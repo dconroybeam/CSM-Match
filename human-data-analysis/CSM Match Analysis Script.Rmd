@@ -61,8 +61,8 @@ numDatesByCondition <- table(data$c)
 attractionSummary <- summary(data$ltAttraction) #one NA? 
 histAttraction <- hist(data$ltAttraction)
 
-nextDateSummary <- summary(data$ltAttractionDate) #again one NA
-histNextDate <- hist(data$ltAttractionDate)
+nextDateSummary <- summary(data$dateInterest) #again one NA
+histNextDate <- hist(data$dateInterest)
 
 tableExchange <- table(data$contactExchange, data$c)
 
@@ -90,7 +90,7 @@ dataComplete <- data %>%
 attractionModel <- lmer(scale(ltAttraction) ~ c + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
 
 
-secondDateModel <- lmer(scale(ltAttractionDate) ~ c + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
+secondDateModel <- lmer(scale(dateInterest) ~ c + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
 
 
 contactExchangeModel <- glmer(contactExchange ~ c + (1|PIN) + (1|mPIN),
