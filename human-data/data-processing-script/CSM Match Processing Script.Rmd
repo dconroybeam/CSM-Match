@@ -48,37 +48,6 @@ matchDataF$quarter <- "fall"
 matchDataW$quarter <- "winter"
 matchDataComplete <- rbind(matchDataF, matchDataW)
 
-#RAs accidentally used same PIN_mPIN string for both dates, so checking for duplicate date IDs
-#get row of duplicates
-dupIndices <- which(duplicated(data$p) | duplicated(data$p, fromLast = TRUE))
-
-#manually compared date and time of dates for each of these rows; replace incorrect pin & condition with correct one (pins and conditions both came from survey link)
-
-#f24617278_f24848147 --> f24617278_f24480688
-data[371,128] <- "f24617278_f24480688"
-data[371,127] <- "r"
-
-#f24677880_f24173430 -->f24677880_f2458021
-data[63,128] <- "f24677880_f2458021"
-data[63, 127] <- "s"
-
-
-#delete empty rows (participant opened survey twice, only completed one tab) & test row (row 275)
-data <- data[-c(83, 264, 275),]
-
-
-#remove unnecessary columns
-data <- data[18:129]
-
-
-#make all relevant columns numeric
-data <- data %>%
-  mutate(across(c(1, 3:101, 106:108), ~ as.numeric(as.character(.))))
-
-
-#make post-date preference,ideals, own ratings 0-10 scale
-data[,c(4:93)] <- data[,c(4:93)] - 1
-
 
 #extract PINs
 data$PIN<-sapply(data$p,function(x)
@@ -88,6 +57,59 @@ data$PIN<-sapply(data$p,function(x)
 data$mPIN<-sapply(data$p,function(x)
   strsplit(x,"_")[[1]][2]
 )
+
+
+#now check to make sure every date has a reciprocal
+#logical vector: TRUE if the reciprocal exists
+reciprocalPIN <- sapply(1:nrow(data), function(x) {
+  any(data$PIN == data$mPIN[x] & data$mPIN == data$PIN[x])
+})
+
+#fix incorrect p & c's
+data[63, "p"] <-"f24677880_f2458021" #changed from f24677880_f24173430
+data[63, "c"] <- "s"
+
+data[328,"p"] <- "f2414182_f24102355" #changed from f2414182_f24467836 
+data[328, "c"] <- "r"
+
+data[361, "p"] <- "f24423571_f24632338" #changed from f24423571_f24275843
+data[361, "c"] <- "s"
+
+data[371, "p"] <- "f24617278_f24480688" #changed from f24617278_f24848147
+data[371, "c"] <- "r"
+
+
+
+#redo extracting PINs
+data$PIN<-sapply(data$p,function(x)
+  strsplit(x,"_")[[1]][1]
+  )
+
+data$mPIN<-sapply(data$p,function(x)
+  strsplit(x,"_")[[1]][2]
+)
+
+
+#RAs accidentally used same PIN_mPIN string for both dates, so checking for duplicate date IDs 
+
+#get row of duplicates
+dupIndices <- which(duplicated(data$p) | duplicated(data$p, fromLast = TRUE))
+
+#dups resulted from empty rows -- delete empty rows (participant opened survey twice, only completed one tab) & test row (row 275)
+data <- data[-c(83, 264, 275),]
+
+
+#remove unnecessary columns
+data <- data[18:131]
+
+
+#make all relevant columns numeric
+data <- data %>%
+  mutate(across(c(1, 3:101, 106:108), ~ as.numeric(as.character(.))))
+
+
+#make post-date preference,ideals, own ratings 0-10 scale
+data[,c(4:93)] <- data[,c(4:93)] - 1
 
 
 
@@ -119,7 +141,7 @@ colnames(selfComp)<-gsub(1,"Comp",colnames(self)[seq(1,30,2)])
 data<-cbind(data, mateComp, selfComp, idealComp)
 
 
-#rearrange data so participants' self ratings
+#rearrange data so participants' self ratings appear with their date's ratings of them
 #issue: each person potentially appears more than once // this will grab just theri first appearance
 partnerRatings<-as.data.frame(selfComp[match(data$mPIN,data$PIN),])
 colnames(partnerRatings)<-gsub("self","mate",names(partnerRatings))
@@ -133,11 +155,11 @@ data<-cbind(data,partnerRatings) #partnerRatings = partner's ratings of themselv
 ```{r save data}
 
 #post date data
-write.csv(data,"human-data/processed-data/postDateProcessed 041825.csv",
+write.csv(data,"human-data/processed-data/postDateProcessed 042725.csv",
           row.names=F)
 
 #match data
-write.csv(matchDataComplete,"human-data/processed-data/matchDataProcessed 041825.csv",
+write.csv(matchDataComplete,"human-data/processed-data/matchDataProcessed 042725.csv",
           row.names=F)
 
 ```
