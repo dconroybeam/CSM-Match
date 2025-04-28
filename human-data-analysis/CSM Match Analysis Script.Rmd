@@ -12,10 +12,11 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r packages}
 library(dplyr)
 library(lmerTest)
-library(lme4) #for the glmer
-library(car) #for the p values from the glmer
 library(ggplot2)
+library(ggmosaic) # for plotting
 library(PairedData) #to test if variance in attractiveness ratings differs by condition
+library(psych) #for ICC function
+library(data.table) #for melt function
 ```
 
 ```{r functions}
@@ -35,8 +36,10 @@ mv<-function(ideal,traits){
 
 ```{r loading data}
 
-matchData <- read.csv('human-data/processed-data/matchDataProcessed 041825.csv')
-data <- read.csv('human-data/processed-data/postDateProcessed 041825.csv')
+matchData <- read.csv('human-data/processed-data/matchDataProcessed 042725.csv')
+
+
+data <- read.csv('human-data/processed-data/postDateProcessed 042725.csv')
 
 ```
 
@@ -76,6 +79,29 @@ tableExchange <- table(data$contactExchange, data$c)
 ```{r main predictions}
 
 #make data frame with only people that completed 2 dates
+
+#first see who mutually exchanged contact info
+data$contactReceive<-sapply(1:nrow(data),function(x)
+  data$contactExchange[data$PIN==data$mPIN[x] & data$mPIN==data$PIN[x]]
+) #basically 1 if partner wanted to exchange info with them, 0 if they didn't
+
+#find mutuals
+mutuals <- data[sapply(1:nrow(data), function(x) {
+  self_exchange <- data$contactExchange[x]
+  
+  # Find the reciprocal index
+  reciprocal <- which(data$PIN == data$mPIN[x] & data$mPIN == data$PIN[x])
+  
+  # Check if both sides exchanged contact
+  if (length(reciprocal) == 1) {
+    return(self_exchange & data$contactExchange[reciprocal])
+  } else {
+    return(FALSE)  # not mutual if there's no clean match
+  }
+}), c("PIN", "mPIN")]
+
+
+
 ##column for number of dates
 data <- data %>% 
   group_by(PIN) %>%
@@ -84,6 +110,15 @@ data <- data %>%
 #only those who had two dates
 dataComplete <- data %>%
   filter(numDates == 2)
+
+#make people in match data same as those in dataComplete
+matchDataFiltered <- matchData %>%
+  filter(PIN %in% dataComplete$PIN)
+
+dataComplete$date<-sapply(1:nrow(dataComplete),function(x)
+  ifelse(dataComplete$sex[x]==0,paste0(dataComplete$PIN[x],dataComplete$mPIN[x]),
+         paste0(dataComplete$mPIN[x],dataComplete$PIN[x]))
+  )
 
 
 
@@ -98,12 +133,100 @@ contactExchangeModel <- glmer(contactExchange ~ c + (1|PIN) + (1|mPIN),
   control = glmerControl(optimizer = "optimx", optCtrl = list(method = "nlminb", iter.max = 10000, eval.max = 10000)))
   #need optimizer to fix convergence issue
 
-contactExchangePValue <- car::Anova(contactExchangeModel, type = 2)
-
-
 
 contactExchangeChisq <- chisq.test(table(dataComplete$c, dataComplete$contactExchange))
 
+
+
+
+
+```
+
+```{r rating agreement}
+
+##calculate perception accuracy 
+
+#correlation between impressions of partner and date's self ratings
+colnamesTraits <- c("Affectionate", "Ambition", "Artistic", "Disposition", "Family", "Health", "Humor", "Intelligence", 
+                    "Kindness", "Parenting", "PhysAtt", "Religious", "Resources", "Sexiness", "Status")
+
+traitCors <- data.frame("trait" = colnamesTraits, 
+                        "cor" = round(diag(cor(dataComplete[,115:129],
+                                               dataComplete[,160:174],
+                                               use = "pairwise.complete.obs")), 3))
+
+
+#mate preference fulfillment based on impressions of partners (vs partner's actual self reported traits)
+dataComplete$prefMatch <- apply(dataComplete, 1, function(x)
+  mv(x[145:159], x[115:129])) #first is ideals, second is ratings of date
+
+
+#prefMatch by condition
+prefMatchCondition <- tapply(dataComplete$prefMatch,list(dataComplete$c,dataComplete$sex),mean)
+
+
+
+#pre and post ideals correlation
+dataPreAndPost <- dataComplete %>%
+  left_join(dplyr::select(matchDataFiltered, PIN, idealAffectionComp: idealStatusComp) %>%
+              rename_with(~paste0(., "T1"), -PIN), 
+            by = "PIN")
+
+
+#pre date and post date ideals correlation
+traitCorsPrePost <- data.frame("trait" = colnamesTraits, 
+                        "cor" = round(diag(cor(dataPreAndPost[,179:193],
+                                               dataPreAndPost[,145:159],
+                                               use = "pairwise.complete.obs")), 3))
+
+
+```
+
+
+```{r Exploratory models}
+
+#Exploratory Prediction 1: relationship between condition and romantic interest will be mediated by partner perception accuracy
+attractionModelPerceived <- lmer(scale(ltAttraction) ~ c + scale(prefMatch) + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
+
+
+#Exploratory Prediction 2: There will be more variance in romantic interest between participants in randomly assigned date partners relative to matched date partners. 
+
+varConditionR <- var(dataComplete$ltAttraction[dataComplete$c == "r"])
+
+varConditionS <- var(dataComplete$ltAttraction[dataComplete$c == "s"], na.rm = TRUE) #one NA case
+
+#to test if they are significantly different
+varTest <- var.test(dataComplete$ltAttraction[dataComplete$c == "r"], dataComplete$ltAttraction[dataComplete$c == "s"], paired = TRUE)
+
+
+##Exploratory prediction 3 (not pre-registered): interest in another date ~ perceived MV * perceived interest
+dateInterestReciprocityModel <-lmer(scale(dateInterest)~scale(dateInterestDate)*scale(prefMatch)+(1|PIN)+(1|mPIN),data=dataComplete)
+ltAttractionReciprocityModel<-lmer(scale(ltAttraction)~scale(ltAttractionDate)*scale(prefMatch)+(1|PIN)+(1|mPIN),data=dataComplete)
+stAttractionReciprocityModel<-lmer(scale(stAttraction)~scale(stAttractionDate)*scale(prefMatch)+(1|PIN)+(1|mPIN),data=dataComplete)
+
+
+
+
+##Exploratory prediction 4 (not pre-registered): perception accuracy is predicted by card use
+
+dataMelt<-melt(as.data.table(data),id.vars=c("PIN","mPIN","cardUse"),
+               measure.vars=list(115:129,160:174),
+               value.name=c("date","mate")) #date = participant rating of their date; mate = partner's rating of themselves
+
+dataMelt$variable<-rep(colnames(data[,160:174]),each=nrow(data))
+
+dataMelt$variable<-gsub("mate","",dataMelt$variable)
+dataMelt$variable<-gsub("Comp","",dataMelt$variable)
+
+dataMelt$variable<-factor(dataMelt$variable)
+
+cardEffectModel<-lmer(date~mate*cardUse+(1|PIN)+(1|mPIN),data=dataMelt)
+
+```
+
+
+
+```{r old matrix plot}
 ###matrix plot
 
 #create matrix dataframe
@@ -124,44 +247,141 @@ matrixDFPlot <- ggplot(matrixDF, aes(x= condition, y = contactExchange, fill = c
   scale_y_discrete(labels = c('No','Yes')) +
   labs(x = "Condition", y = "Contact Exchange", fill = "Combination Freq.") +
   theme(text = element_text(size = 13))
-
-
 ```
 
-```{r exploratory analyses}
 
-##calculate perception accuracy 
+```{r plotting}
+dataComplete$contactRecip<-ifelse(dataComplete$contactExchange==1 & dataComplete$contactReceive==1,
+                                  "Mutual Exchange",ifelse(
+                                    dataComplete$contactExchange==0 & dataComplete$contactReceive==0,
+                                    "Mutual Reject","One Exchange"
+                                  ))
 
-#correlation between impressions of partner and date's self ratings
-colnamesTraits <- c("Affectionate", "Ambition", "Artistic", "Disposition", "Family", "Health", "Humor", "Intelligence", 
-                    "Kindness", "Parenting", "PhysAtt", "Religious", "Resources", "Sexiness", "Status")
+dataComplete$contactExchange<-factor(dataComplete$contactExchange,labels=c("Not Shared","Shared"))
+dataComplete$contactReceive<-factor(dataComplete$contactReceive,labels=c("Not\nShared","Shared"))
 
-traitCors <- data.frame("trait" = colnamesTraits, 
-                        "cor" = round(diag(cor(dataComplete[,115:129],
-                                               dataComplete[,160:174],
-                                               use = "pairwise.complete.obs")), 3))
+sTable<-round(prop.table(table(dataComplete$contactReceive[dataComplete$c=="s"],
+                         dataComplete$contactExchange[dataComplete$c=="s"])),2)
 
-
-#mate preference fulfillment based on impressions of partners (vs partner's actual self reported traits)
-dataComplete$prefMatch <- apply(dataComplete, 1, function(x)
-  mv(x[145:159], x[115:129])) #first is ideals, second is ratings of date
-
-tapply(dataComplete$prefMatch,list(dataComplete$c,dataComplete$sex),mean)
+rTable<-round(prop.table(table(dataComplete$contactReceive[dataComplete$c=="r"],
+                         dataComplete$contactExchange[dataComplete$c=="r"])),2)
 
 
 
-#Exploratory Prediction 1: relationship between condition and romantic interest will be mediated by partner perception accuracy
-attractionModelPerceived <- lmer(scale(ltAttraction) ~ c + prefMatch + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
+#Plot contact exchange for random dates
+exchangePlotS <- ggplot(data = dataComplete[dataComplete$c=="s",],) +
+  geom_mosaic(aes(x = product(contactReceive, contactExchange)),
+              fill=c("black","grey30","grey30","#009E73"))  +
+  labs(x = "Participant Phone Number", y = "Partner Phone Number") +
+  annotate(
+    "text",
+    x = c(.25, .75, .25, .75),
+    y = c(sTable[1,1]/sum(sTable[,1])/2,
+          sTable[1,2]/sum(sTable[,2])/2,
+          1-sTable[2,1]/sum(sTable[,1])/2,
+          1-sTable[2,2]/sum(sTable[,2])/2),
+    label = paste0(100*sTable, "%")[c(1,3,2,4)],
+    size = 8,
+    color="white"
+  ) +
+  theme(
+    text = element_text(size = 30),
+    legend.position = "none",
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
+  )
 
 
-#Exploratory Prediction 2: There will be more variance in romantic interest between participants in randomly assigned date partners relative to matched date partners. 
 
-varConditionR <- var(dataComplete$ltAttraction[dataComplete$c == "r"])
+#Plot contact exchange for matched dates
+exchangePlotR <- ggplot(data = dataComplete[dataComplete$c=="r",],) +
+  geom_mosaic(aes(x = product(contactReceive, contactExchange)),
+              fill=c("black","grey30","grey30","#009E73"))  +
+  labs(x = "Participant Phone Number", y = "Partner Phone Number") +
+  annotate(
+    "text",
+    x = c(.15, .66, .15, .66),
+    y = c(rTable[1,1]/sum(rTable[,1])/2,
+          (rTable[1,2]/sum(rTable[,2]))/2,
+          1-rTable[2,1]/sum(rTable[,1])/2,
+          1-rTable[2,2]/sum(rTable[,2])/2),
+    label = paste0(100*rTable, "%")[c(1,3,2,4)],
+    size = 8,
+    color="white"
+  ) +
+  theme(
+    text = element_text(size = 30),
+    legend.position = "none",
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
+  )
 
-varConditionS <- var(dataComplete$ltAttraction[dataComplete$c == "s"], na.rm = TRUE) #one NA case
 
-#to test if they are significantly different
-varTest <- var.test(dataComplete$ltAttraction[dataComplete$c == "r"], dataComplete$ltAttraction[dataComplete$c == "s"], paired = TRUE)
+
+
+##interest plot
+
+#variables
+dataComplete$interestJitter<-jitter(dataComplete$dateInterest)
+dataComplete$cPref<-sapply(1:nrow(dataComplete),function(x)
+  ifelse(dataComplete$dateInterest[dataComplete$PIN==dataComplete$PIN[x] & dataComplete$c=="r"]>
+           dataComplete$dateInterest[dataComplete$PIN==dataComplete$PIN[x] & dataComplete$c=="s"],
+                  "Matched Higher",
+                  ifelse(dataComplete$dateInterest[dataComplete$PIN==dataComplete$PIN[x] & dataComplete$c=="s"]>
+                                  dataComplete$dateInterest[dataComplete$PIN==dataComplete$PIN[x] & dataComplete$c=="r"],
+                                "Random Higher","Equal")
+  )
+)
+
+
+
+
+interestPlot<-ggplot(data=dataComplete,
+     aes(x=factor(c,labels=c("Matched","Random")),
+         y=interestJitter,
+         color=cPref,
+         group=PIN))+
+  geom_point()+
+  geom_line()+
+  labs(x="Condition",
+     y="Interest in Another Date")+
+  theme(text=element_text(size=25),legend.position="none")+
+  stat_summary(aes(group=1),
+             fun="mean",geom="line",color=I("black"),lwd=2.5)+
+  scale_color_manual(values=c("#004D40","#D81B60","#1E88E5"))
+
+
+interestDiff<-data.frame(tapply(dataComplete$dateInterest,list(dataComplete$PIN,dataComplete$c),mean))
+interestDiff$diff<-interestDiff[,1]-interestDiff[,2]
+
+interestViolin<-ggplot(data=interestDiff,
+       aes(y=diff,x=1,
+           fill=I("#1E88E5")))+
+  geom_violin(alpha=.5)+
+  geom_boxplot(width=.1,alpha=.5)+
+  geom_hline(yintercept=mean(interestDiff$diff,na.rm=T),color="#D81B60",lwd=2)+
+  geom_hline(yintercept=0,color="#004D40",lwd=2)+
+  labs(y="Date Interest Difference\n(Matched - Random)",x="")+
+  theme(text=element_text(size=25))+
+  scale_x_continuous(breaks=c())+
+  scale_y_continuous(breaks=seq(-6,6,2))
+
+
+
+
+
+#plot of partner self ratings and participant rating of partner
+impressionPlot<-ggplot(data=dataMelt,
+       aes(x=mate,
+           y=date,
+           color=variable))+
+  labs(x="Partner Self Rating",
+       y="Participant Rating of Partner",
+       color="Trait Dimension")+
+  theme(text=element_text(size=25),legend.position="none")+
+  coord_cartesian(ylim=c(0,10),xlim=c(0,10))+
+  geom_jitter(size=2)+
+  geom_smooth(method="lm",se=F)
 
 
 ```
