@@ -72,7 +72,6 @@ tableExchange <- table(data$contactExchange, data$c)
 
 
 
-
 ```
 
 
@@ -132,9 +131,6 @@ contactExchangeModel <- glmer(contactExchange ~ c + (1|PIN) + (1|mPIN),
   data = dataComplete, family = binomial,
   control = glmerControl(optimizer = "optimx", optCtrl = list(method = "nlminb", iter.max = 10000, eval.max = 10000)))
   #need optimizer to fix convergence issue
-
-
-contactExchangeChisq <- chisq.test(table(dataComplete$c, dataComplete$contactExchange))
 
 
 
@@ -291,6 +287,8 @@ exchangePlotS <- ggplot(data = dataComplete[dataComplete$c=="s",],) +
     panel.grid.minor = element_blank()
   )
 
+#ggsave("Figures/CSM Match Random Exchange Plot.tiff",exchangePlotS,height=10,width=10,dpi=300)
+
 
 
 #Plot contact exchange for matched dates
@@ -316,7 +314,7 @@ exchangePlotR <- ggplot(data = dataComplete[dataComplete$c=="r",],) +
     panel.grid.minor = element_blank()
   )
 
-
+#ggsave("Figures/CSM Match Matched Exchange Plot.tiff",exchangePlotR,height=10,width=10,dpi=300)
 
 
 ##interest plot
@@ -383,6 +381,78 @@ impressionPlot<-ggplot(data=dataMelt,
   geom_jitter(size=2)+
   geom_smooth(method="lm",se=F)
 
+
+
+#prediction 1: attraction graph
+attractionViolin <- ggplot(dataComplete, aes(x = c, y = ltAttraction, fill = c)) +
+  geom_violin(trim = FALSE) +
+  geom_boxplot(width = 0.3, outlier.shape = NA, size = 1, fill = "white") +  # add boxplots inside violins
+  labs(x = "Condition", y = "Long-Term Attraction (standardized)") +
+  scale_x_discrete(labels = c("r" = "Matched", "s" = "Random")) +
+  scale_fill_manual(values = c("r" = "#B6284E", "s" = "#F39E44")) +
+  theme_minimal()+
+  theme(text=element_text(size=25),legend.position="none")
+#ggsave("Figures/CSM Match Attraction Violin Plot.tiff",attractionViolin,height=10,width=10,dpi=300)
+
+##Exploratory Prediction 1: relationship between condition and romantic interest will be mediated by partner perception accuracy
+interestMediationPlot <- ggplot(dataComplete, aes(x = prefMatch, y = ltAttraction, color = c))+
+  geom_jitter(width = .07, height = .07, alpha = .03) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(method = "lm", se = TRUE) +
+  labs(
+    x = "Perceived Match of Date's Traits to Reported Ideals",
+    y = "Romantic Attraction to Date", 
+    color = "Condition"
+  ) +
+  scale_color_manual(values = c("r" = "#B6284E", "s" = "#F39E44"),
+                     labels = c("r" = "Matched", "s" = "Random")) +
+  theme_minimal() +
+  theme(text=element_text(size=25))
+#ggsave("Figures/CSM Match Interest Mediation Plot.tiff",interestMediationPlot,height=10,width=10,dpi=300)
+
+
+
+
+
+##Prediction 2 -- dateinterest ~ condition
+#secondDateModel <- lmer(scale(dateInterest) ~ c + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
+
+secondDateViolin <- ggplot(dataComplete, aes(x = c, y = dateInterest, fill = c)) +
+  geom_violin(trim = FALSE) +
+  geom_boxplot(width = 0.3, outlier.shape = NA, size = 1, fill = "white") +  # add boxplots inside violins
+  labs(x = "Condition", y = "Interest in a Second Date (Standardized)") +
+  scale_x_discrete(labels = c("r" = "Matched", "s" = "Random")) +
+  scale_fill_manual(values = c("r" = "#B6284E", "s" = "#F39E44")) +
+  theme_minimal()+
+  theme(text=element_text(size=25),legend.position="none")
+#ggsave("Figures/CSM Match Second Date Violin Plot.tiff",secondDateViolin,height=10,width=10,dpi=300)
+```
+
+
+
+```{r demographics}
+
+participantAge <- summary(matchDataFiltered$age)
+participantQuarter <- table(matchDataFiltered$quarter)
+participantSex <- table(matchDataFiltered$sex)
+participantSexOrient <- table(matchDataFiltered$sexOrient)
+participantGender <- table(matchDataFiltered$gender)
+
+
+#race
+matchDataFiltered$raceText<- apply(matchDataFiltered[, 10:16], 1, function(x) {
+  selected <- which(x == 1)
+  
+  if (length(selected) == 0) {
+    return(NA)  # No race selected
+  } else if (length(selected) == 1) {
+    return(names(x)[selected])  # Only one race selected
+  } else {
+    return("Multiracial")  # Multiple races selected
+  }
+})
+
+participantRace <- table(matchDataFiltered$raceText)
 
 ```
 
