@@ -17,6 +17,7 @@ library(ggmosaic) # for plotting
 library(PairedData) #to test if variance in attractiveness ratings differs by condition
 library(psych) #for ICC function
 library(data.table) #for melt function
+library(ggpubr) 
 ```
 
 ```{r functions}
@@ -428,6 +429,57 @@ secondDateViolin <- ggplot(dataComplete, aes(x = c, y = dateInterest, fill = c))
 #ggsave("Figures/CSM Match Second Date Violin Plot.tiff",secondDateViolin,height=10,width=10,dpi=300)
 ```
 
+```{r Bonus Plots for HBES}
+
+
+##Contact Exchange Sex differences
+
+#i want a plot for men with contact yes and contact no on one axis, and condition on the other
+maleContactData <- data.frame(((table(dataComplete$contactExchange[dataComplete$sex == 1], dataComplete$c[dataComplete$sex == 1]))/sum(table(dataComplete$contactExchange[dataComplete$sex == 1], dataComplete$c[dataComplete$sex == 1])))*100)
+
+colnames(maleContactData) <- c("contactShared", "condition", "frequency")
+
+maleContactData[,3] <- round(maleContactData[,3], 2)
+conditionOrder <- c("s", "r")
+maleContactData$condition <- factor(maleContactData$condition, levels = conditionOrder)
+
+maleContactPlot <- ggplot(maleContactData, aes(x = contactShared, y = condition, fill = frequency)) +
+  geom_tile(color = "white") +
+  geom_text(label = maleContactData$frequency)+
+  scale_fill_gradient(low = "whitesmoke", high = "#009E73") +
+  scale_y_discrete(labels = c("Random", "Matched")) +
+  labs(x = "Contact Info Shared", y = "Date Condition", fill = "Frequency") +
+  theme(text = element_text(size = 20)) +
+  ggtitle("Male Participants")
+
+#Women
+femaleContactData <- data.frame(((table(dataComplete$contactExchange[dataComplete$sex == 0], dataComplete$c[dataComplete$sex == 0]))/sum(table(dataComplete$contactExchange[dataComplete$sex == 0], dataComplete$c[dataComplete$sex == 0])))*100)
+
+colnames(femaleContactData) <- c("contactShared", "condition", "frequency")
+
+femaleContactData[,3] <- round(femaleContactData[,3], 2)
+conditionOrder <- c("s", "r")
+femaleContactData$condition <- factor(femaleContactData$condition, levels = conditionOrder)
+
+femaleContactPlot <- ggplot(femaleContactData, aes(x = contactShared, y = condition, fill = frequency)) +
+  geom_tile(color = "white") +
+  geom_text(label = femaleContactData$frequency)+
+  scale_fill_gradient(low = "whitesmoke", high = "#009E73") +
+  scale_y_discrete(labels = c("Random", "Matched")) +
+  labs(x = "Contact Info Shared", y = "Date Condition", fill = "Frequency") +
+  theme(text = element_text(size = 20)) +
+  ggtitle("Female Participants")
+
+
+#sex differences panel plot
+contactSexPlotPanel <- ggarrange(femaleContactPlot, maleContactPlot, nrow=1, ncol=2, 
+                             common.legend = TRUE, legend = "right", 
+                             font.label = list(color = "black", size = 10))
+
+#ggsave("Figures/CSM Match Sex Differences.tiff",contactSexPlotPanel,height=10,width=20,dpi=300)
+
+
+```
 
 
 ```{r demographics}
