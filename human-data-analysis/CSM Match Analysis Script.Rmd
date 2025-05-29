@@ -291,30 +291,18 @@ permutationRecord$p[i]<-summary(attractionModelPerceivedOnlyPermutation)$coeffic
 
 permutationCI <- quantile(permutationRecord$t, probs = c(0.025, 0.975))
 
+
+
+##Exploratory analysis 7 (prefMatch w/ time 1 preferences)
+dataComplete$prefMatchPre <- sapply(1:nrow(dataComplete), function(x)
+  mv(as.numeric(matchData[match(dataComplete$PIN[x], matchData$PIN), 53:67]), #ideals time 1
+     as.numeric(dataComplete[x, 115:129]))) #date ratings
+
+#redo romantic attraction model with prefMatchPre (exploratory prediction 1b)
+attractionModelPerceivedOnlyPreDate <- lmer(scale(ltAttraction) ~ scale(prefMatchPre) + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
+
 ```
 
-```{r old matrix plot}
-###matrix plot
-
-#create matrix dataframe
-matrixDF <- data.frame(((table(dataComplete$c, dataComplete$contactExchange))/sum(table(dataComplete$c, dataComplete$contactExchange)))*100)
-
-#relabel column names
-colnames(matrixDF) <- c("condition", "contactExchange", "comboFrequency")
-
-#round all numbers to 2 decimal places
-matrixDF[,3] <-round(matrixDF[,3],2)
-
-#plot matrix
-matrixDFPlot <- ggplot(matrixDF, aes(x= condition, y = contactExchange, fill = comboFrequency)) +
-  geom_tile(color = "white") +
-  geom_text(label = matrixDF$comboFrequency)+
-  scale_fill_gradient(low = "white", high = "#009900", na.value = "whitesmoke") +
-  scale_x_discrete(labels = c('Matched','Random')) +
-  scale_y_discrete(labels = c('No','Yes')) +
-  labs(x = "Condition", y = "Contact Exchange", fill = "Combination Freq.") +
-  theme(text = element_text(size = 13))
-```
 
 ```{r plotting}
 dataComplete$contactRecip<-ifelse(dataComplete$contactExchange==1 & dataComplete$contactReceive==1,
@@ -602,6 +590,21 @@ ltAttractionCardUsePlot <- ggplot(dataComplete, aes(x = scale(cardUse), y = scal
     
 #ggsave("Figures/CSM Match CardUse Attraction Plot.tiff",ltAttractionCardUsePlot,height=10,width=10,dpi=300)
 
+
+
+##Exploratory prediction 7: Romantic attraction as a function of pre-date prefs
+interestPrefMatchPrePlot <- ggplot(dataComplete, aes(x = scale(prefMatchPre), y = scale(ltAttraction)))+
+  geom_jitter(width = .07, height = .07, alpha = .03) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(method = "lm", se = TRUE, color = "#28B68F") +
+  labs(
+    x = "Perceived Match of Date's Traits to Reported Time 1 Ideals",
+    y = "Romantic Attraction to Date (Standardized)"
+  ) +
+  theme_minimal() +
+  theme(text=element_text(size=25))
+
+#ggsave("Figures/CSM Match Interest PrefMatch Pre Plot.tiff",interestPrefMatchPrePlot,height=10,width=10,dpi=300)
 ```
 
 ```{r demographics}
