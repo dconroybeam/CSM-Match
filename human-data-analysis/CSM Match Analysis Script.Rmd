@@ -18,6 +18,7 @@ library(PairedData) #to test if variance in attractiveness ratings differs by co
 library(psych) #for ICC function
 library(data.table) #for melt function
 library(ggpubr) 
+library(viridis) #for card use graph
 ```
 
 ```{r functions}
@@ -32,8 +33,6 @@ mv<-function(ideal,traits){
 }
 
 ```
-
-
 
 ```{r loading data}
 
@@ -74,7 +73,6 @@ tableExchange <- table(data$contactExchange, data$c)
 
 
 ```
-
 
 ```{r main predictions}
 
@@ -123,9 +121,13 @@ dataComplete$date<-sapply(1:nrow(dataComplete),function(x)
 
 
 attractionModel <- lmer(scale(ltAttraction) ~ c + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
+attractionModelSexMain <- lmer(scale(ltAttraction) ~ c+sex + (1|PIN) + (1|mPIN), 
+  data = dataComplete) #no sig int; looking at main
 
 
 secondDateModel <- lmer(scale(dateInterest) ~ c + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
+secondDateModelSexMain <- lmer(scale(dateInterest) ~ c+sex + (1|PIN) + (1|mPIN), 
+  data = dataComplete) #no sig int; looking at main
 
 
 contactExchangeModel <- glmer(contactExchange ~ c + (1|PIN) + (1|mPIN),
@@ -133,6 +135,11 @@ contactExchangeModel <- glmer(contactExchange ~ c + (1|PIN) + (1|mPIN),
   control = glmerControl(optimizer = "optimx", optCtrl = list(method = "nlminb", iter.max = 10000, eval.max = 10000)))
   #need optimizer to fix convergence issue
 
+contactExchangeModelMen <- glmer(contactExchange ~ c + (1|PIN), #dropped mPIN random effect bc low variance
+  data = dataComplete[dataComplete$sex == "1",], family = binomial)
+
+contactExchangeModelSexMain <- glmer(contactExchange ~ c+sex + (1|PIN) + (1|mPIN), 
+  data = dataComplete, family = binomial)#no sig int; looking at main
 
 
 
@@ -179,12 +186,13 @@ traitCorsPrePost <- data.frame("trait" = colnamesTraits,
 
 ```
 
-
 ```{r Exploratory models}
 
 #Exploratory Prediction 1: relationship between condition and romantic interest will be mediated by partner perception accuracy
 attractionModelPerceived <- lmer(scale(ltAttraction) ~ c + scale(prefMatch) + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
 
+#Exploratory Prediction 1b: romantic interest can be predicted by prefMatch
+attractionModelPerceivedOnly <- lmer(scale(ltAttraction) ~ scale(prefMatch) + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
 
 #Exploratory Prediction 2: There will be more variance in romantic interest between participants in randomly assigned date partners relative to matched date partners. 
 
@@ -219,9 +227,71 @@ dataMelt$variable<-factor(dataMelt$variable)
 
 cardEffectModel<-lmer(date~mate*cardUse+(1|PIN)+(1|mPIN),data=dataMelt)
 
+
+
+
+#Exploratory analysis 5 (not pre-reg): Is prefmatch (of ideals to partner's self rated traits, not impressions) predicted by condition? (Are we making better recs)
+
+dataComplete$prefMatchActual <- apply(dataComplete, 1, function(x)
+  mv(x[145:159], x[160:174])) #first is ideals, second is date's ratings of themselves
+
+prefMatchActualModel <- lmer(scale(prefMatchActual) ~ c + (1|PIN) + (1|mPIN), data = dataComplete)
+
+prefMatchConditionActual <- tapply(dataComplete$prefMatchActual,list(dataComplete$c,dataComplete$sex),mean)
+
+
+
+
+
+#Exploratory analysis 6 (not pre-reg): Are outcome variables predicted by card use? 
+
+dateInterestCardUseModel <- lmer(scale(dateInterest) ~ scale(cardUse) + scale(prefMatch) + (1|PIN) + (1|mPIN), data = dataComplete)
+ltAttractionCardUseModel <- lmer(scale(ltAttraction) ~ scale(cardUse) + scale(prefMatch) + (1|PIN) + (1|mPIN), data = dataComplete)
+contactExchangeCardUseModel <- glmer(contactExchange ~ scale(cardUse) + scale(prefMatch) + (1|PIN) + (1|mPIN), data = dataComplete, family = binomial)
+
+
+#Exploratory analysis 7 (not pre-reg): Zietch pref label shuffle permutation test
+
+#make new df just for this
+permutationData <- dataComplete[,c(113, 114, 110, 145:159, 115:129, 94:96, 100)]
+
+#add blank columns for shuffling
+shuffledNames <- paste0(names(permutationData[,4:18]), "Shuffled")
+permutationData[,shuffledNames] <- NA_real_
+
+#loop number
+nLoop <- 50000
+
+#df to save loop output
+permutationRecord <- data.frame(
+                  estimate=rep(NA,nLoop),
+                  t=rep(NA,nLoop),
+                  p=rep(NA,nLoop))
+##For Loop
+
+for (i in 1:nLoop){
+#recalculate pref match with shuffled prefs
+permutationData[shuffledNames] <- t(apply(permutationData[,4:18], 1, sample)) #1 here makes this row by row
+
+
+#mate preference fulfillment based on impressions of partners & shuffled ideals
+permutationData$prefMatchPermutation <- apply(permutationData, 1, function(x)
+  mv(x[38:52], x[19:33])) #first is shuffled ideals, second is ratings of date
+
+#redoing lt attraction model with shuffled prefs
+attractionModelPerceivedOnlyPermutation <- lmer(scale(ltAttraction) ~ scale(prefMatchPermutation) + (1|PIN) + (1|mPIN), data = permutationData)
+
+#save estimate, t value, p value
+permutationRecord$estimate[i]<-summary(attractionModelPerceivedOnlyPermutation)$coefficients[2,1]
+permutationRecord$t[i]<-summary(attractionModelPerceivedOnlyPermutation)$coefficients[2,4]
+permutationRecord$p[i]<-summary(attractionModelPerceivedOnlyPermutation)$coefficients[2,5]
+}
+
+#get 95% CI with quantile function
+
+permutationCI <- quantile(permutationRecord$t, probs = c(0.025, 0.975))
+
 ```
-
-
 
 ```{r old matrix plot}
 ###matrix plot
@@ -245,7 +315,6 @@ matrixDFPlot <- ggplot(matrixDF, aes(x= condition, y = contactExchange, fill = c
   labs(x = "Condition", y = "Contact Exchange", fill = "Combination Freq.") +
   theme(text = element_text(size = 13))
 ```
-
 
 ```{r plotting}
 dataComplete$contactRecip<-ifelse(dataComplete$contactExchange==1 & dataComplete$contactReceive==1,
@@ -278,11 +347,11 @@ exchangePlotS <- ggplot(data = dataComplete[dataComplete$c=="s",],) +
           1-sTable[2,1]/sum(sTable[,1])/2,
           1-sTable[2,2]/sum(sTable[,2])/2),
     label = paste0(100*sTable, "%")[c(1,3,2,4)],
-    size = 8,
+    size = 12,
     color="white"
   ) +
   theme(
-    text = element_text(size = 30),
+    text = element_text(size = 35),
     legend.position = "none",
     panel.grid.major = element_blank(),
     panel.grid.minor = element_blank()
@@ -305,11 +374,11 @@ exchangePlotR <- ggplot(data = dataComplete[dataComplete$c=="r",],) +
           1-rTable[2,1]/sum(rTable[,1])/2,
           1-rTable[2,2]/sum(rTable[,2])/2),
     label = paste0(100*rTable, "%")[c(1,3,2,4)],
-    size = 8,
+    size = 12,
     color="white"
   ) +
   theme(
-    text = element_text(size = 30),
+    text = element_text(size = 35),
     legend.position = "none",
     panel.grid.major = element_blank(),
     panel.grid.minor = element_blank()
@@ -385,31 +454,28 @@ impressionPlot<-ggplot(data=dataMelt,
 
 
 #prediction 1: attraction graph
-attractionViolin <- ggplot(dataComplete, aes(x = c, y = ltAttraction, fill = c)) +
+attractionViolin <- ggplot(dataComplete, aes(x = c, y = scale(ltAttraction), fill = c)) +
   geom_violin(trim = FALSE) +
-  geom_boxplot(width = 0.3, outlier.shape = NA, size = 1, fill = "white") +  # add boxplots inside violins
-  labs(x = "Condition", y = "Long-Term Attraction (standardized)") +
-  scale_x_discrete(labels = c("r" = "Matched", "s" = "Random")) +
+  geom_boxplot(width = 0.3, outlier.shape = NA, size = 1, fill = "white") +  
+  labs(x = "Condition", y = "Long-Term Attraction (standardized)") + 
+  scale_x_discrete(labels = c("r" = "Matched Date", "s" = "Random Date")) +
   scale_fill_manual(values = c("r" = "#B6284E", "s" = "#F39E44")) +
   theme_minimal()+
   theme(text=element_text(size=25),legend.position="none")
 #ggsave("Figures/CSM Match Attraction Violin Plot.tiff",attractionViolin,height=10,width=10,dpi=300)
 
-##Exploratory Prediction 1: relationship between condition and romantic interest will be mediated by partner perception accuracy
-interestMediationPlot <- ggplot(dataComplete, aes(x = prefMatch, y = ltAttraction, color = c))+
+##Exploratory Prediction 1b: can predict interest with prefMatch
+interestPrefMatchPlot <- ggplot(dataComplete, aes(x = scale(prefMatch), y = scale(ltAttraction)))+
   geom_jitter(width = .07, height = .07, alpha = .03) +
   geom_point(alpha = 0.3) +
-  geom_smooth(method = "lm", se = TRUE) +
+  geom_smooth(method = "lm", se = TRUE, color = "#28B68F") +
   labs(
     x = "Perceived Match of Date's Traits to Reported Ideals",
-    y = "Romantic Attraction to Date", 
-    color = "Condition"
+    y = "Romantic Attraction to Date (Standardized)"
   ) +
-  scale_color_manual(values = c("r" = "#B6284E", "s" = "#F39E44"),
-                     labels = c("r" = "Matched", "s" = "Random")) +
   theme_minimal() +
   theme(text=element_text(size=25))
-#ggsave("Figures/CSM Match Interest Mediation Plot.tiff",interestMediationPlot,height=10,width=10,dpi=300)
+#ggsave("Figures/CSM Match Interest PrefMatch Plot.tiff",interestPrefMatchPlot,height=10,width=10,dpi=300)
 
 
 
@@ -418,15 +484,35 @@ interestMediationPlot <- ggplot(dataComplete, aes(x = prefMatch, y = ltAttractio
 ##Prediction 2 -- dateinterest ~ condition
 #secondDateModel <- lmer(scale(dateInterest) ~ c + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
 
-secondDateViolin <- ggplot(dataComplete, aes(x = c, y = dateInterest, fill = c)) +
+secondDateViolin <- ggplot(dataComplete, aes(x = c, y = scale(dateInterest), fill = c)) +
   geom_violin(trim = FALSE) +
   geom_boxplot(width = 0.3, outlier.shape = NA, size = 1, fill = "white") +  # add boxplots inside violins
   labs(x = "Condition", y = "Interest in a Second Date (Standardized)") +
-  scale_x_discrete(labels = c("r" = "Matched", "s" = "Random")) +
+  scale_x_discrete(labels = c("r" = "Matched Date", "s" = "Random Date")) +
   scale_fill_manual(values = c("r" = "#B6284E", "s" = "#F39E44")) +
   theme_minimal()+
   theme(text=element_text(size=25),legend.position="none")
 #ggsave("Figures/CSM Match Second Date Violin Plot.tiff",secondDateViolin,height=10,width=10,dpi=300)
+
+
+
+
+
+
+#Exploratory prediction: recommended matches are closer in mv than random
+
+prefMatchActualViolin <- ggplot(dataComplete, aes(x = c, y = scale(prefMatchActual), fill = c)) +
+  geom_violin(trim = FALSE) +
+  geom_boxplot(width = 0.3, outlier.shape = NA, size = 1, fill = "white") +
+  labs(x = "Condition", y = "Actual Match Between Participant Ideals \nand Date Traits (Standardized)")+
+  scale_x_discrete(labels = c("r" = "Matched Date", "s" = "Random Date")) +
+  scale_fill_manual(values = c("r" = "#B6284E", "s" = "#F39E44")) +
+  theme_minimal()+
+  theme(text = element_text(size = 25), legend.position = "none")
+#ggsave("Figures/CSM Match Actual Pref Match.tiff",prefMatchActualViolin,height=10,width=10,dpi=300)
+
+
+
 ```
 
 ```{r Bonus Plots for HBES}
@@ -443,13 +529,13 @@ maleContactData[,3] <- round(maleContactData[,3], 2)
 conditionOrder <- c("s", "r")
 maleContactData$condition <- factor(maleContactData$condition, levels = conditionOrder)
 
-maleContactPlot <- ggplot(maleContactData, aes(x = contactShared, y = condition, fill = frequency)) +
+maleContactPlot <- ggplot(maleContactData, aes(x = condition, y = contactShared, fill = frequency)) +
   geom_tile(color = "white") +
-  geom_text(label = maleContactData$frequency)+
+  geom_text(label = maleContactData$frequency, size = 12)+
   scale_fill_gradient(low = "whitesmoke", high = "#009E73") +
-  scale_y_discrete(labels = c("Random", "Matched")) +
-  labs(x = "Contact Info Shared", y = "Date Condition", fill = "Frequency") +
-  theme(text = element_text(size = 20)) +
+  scale_x_discrete(labels = c("Random", "Matched")) +
+  labs(y = "Contact Info Shared", x = "Date Condition", fill = "Frequency") +
+  theme(text = element_text(size = 35), legend.position = "none") +
   ggtitle("Male Participants")
 
 #Women
@@ -461,26 +547,62 @@ femaleContactData[,3] <- round(femaleContactData[,3], 2)
 conditionOrder <- c("s", "r")
 femaleContactData$condition <- factor(femaleContactData$condition, levels = conditionOrder)
 
-femaleContactPlot <- ggplot(femaleContactData, aes(x = contactShared, y = condition, fill = frequency)) +
+femaleContactPlot <- ggplot(femaleContactData, aes(x = condition, y = contactShared, fill = frequency)) +
   geom_tile(color = "white") +
-  geom_text(label = femaleContactData$frequency)+
+  geom_text(label = femaleContactData$frequency, size = 12)+
   scale_fill_gradient(low = "whitesmoke", high = "#009E73") +
-  scale_y_discrete(labels = c("Random", "Matched")) +
-  labs(x = "Contact Info Shared", y = "Date Condition", fill = "Frequency") +
-  theme(text = element_text(size = 20)) +
+  scale_x_discrete(labels = c("Random", "Matched")) +
+  labs(y = "Contact Info Shared", x = "Date Condition", fill = "Frequency") +
+  theme(text = element_text(size = 35), legend.position = "none") +
   ggtitle("Female Participants")
 
 
 #sex differences panel plot
 contactSexPlotPanel <- ggarrange(femaleContactPlot, maleContactPlot, nrow=1, ncol=2, 
-                             common.legend = TRUE, legend = "right", 
-                             font.label = list(color = "black", size = 10))
+                             font.label = list(color = "black", size = 12))
 
 #ggsave("Figures/CSM Match Sex Differences.tiff",contactSexPlotPanel,height=10,width=20,dpi=300)
 
 
-```
 
+
+
+
+##participant ratings of date ~ card use * date self ratings
+#bin card use into quartiles
+dataMelt$cardUseBinned <- ntile(dataMelt$cardUse, 4)
+
+cardUseRatingAccuracyPlot <- ggplot(dataMelt, aes(x = mate, y = date, color = factor(cardUseBinned), fill = factor(cardUseBinned)))+
+  geom_jitter(width = .07, height = .07, alpha = .03) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(method = "lm", se = TRUE, color = "black") +
+  labs(
+    x = "Date Partner Self-Ratings",
+    y = "Participant Ratings of Date Partner",
+    fill = "Card Use (Binned into Quartiles)"
+  ) +
+  scale_color_discrete(guide = "none") +
+  scale_fill_viridis(discrete = TRUE, option = "inferno", labels = c("Q1: Bottom 25%", "Q2: 25%-50%", "Q3: 50%-75%", "Q4: Top 25%")) +
+  theme_minimal() +
+  theme(text=element_text(size=25))
+
+
+
+#ggsave("Figures/CSM Match CardUse Accuracy Plot.tiff",cardUseRatingAccuracyPlot,height=10,width=15,dpi=300)
+
+
+
+##card use on romantic attraction
+ltAttractionCardUsePlot <- ggplot(dataComplete, aes(x = scale(cardUse), y = scale(ltAttraction))) +
+  geom_point(alpha = .3, color = "#389AB2")+
+  geom_smooth(method = "lm", se = TRUE, color = "black", fill = "#389AB2") +
+  labs( x = "Card Use (Standardized)", y = "Romantic Attraction (Standardized)") +
+  theme_minimal()+
+  theme(text = element_text(size = 25))
+    
+#ggsave("Figures/CSM Match CardUse Attraction Plot.tiff",ltAttractionCardUsePlot,height=10,width=10,dpi=300)
+
+```
 
 ```{r demographics}
 
