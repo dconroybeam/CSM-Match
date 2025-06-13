@@ -303,7 +303,6 @@ attractionModelPerceivedOnlyPreDate <- lmer(scale(ltAttraction) ~ scale(prefMatc
 
 ```
 
-
 ```{r plotting}
 dataComplete$contactRecip<-ifelse(dataComplete$contactExchange==1 & dataComplete$contactReceive==1,
                                   "Mutual Exchange",ifelse(
@@ -630,6 +629,50 @@ matchDataFiltered$raceText<- apply(matchDataFiltered[, 10:16], 1, function(x) {
 })
 
 participantRace <- table(matchDataFiltered$raceText)
+
+```
+
+```{r future contact info}
+
+#load in debrief data
+debriefData <- read.csv("human-data/raw-data/Blind Date Debrief - V3_June 13, 2025_13.09.csv")
+
+#remove title rows
+debriefData <- debriefData[-c(1:2),]
+
+#remove participants outside of fall and winter (based on start date)
+debriefData <- debriefData %>%
+  mutate(StartDate = as.POSIXct(StartDate, format = "%Y-%m-%d %H:%M:%S")) %>%
+  filter(StartDate >= as.POSIXct("2024-09-22 00:00:00"))
+
+#remove duplicate pins
+debriefData <- debriefData[!duplicated(debriefData$p),]
+
+#now only keep people who are also in dataComplete
+debriefData <- subset(debriefData, p %in% dataComplete$PIN)
+
+
+#figure out how many agreed to future contact exchange
+table(debriefData$followUpConsent) #110 said yes
+
+
+
+
+#power analysis using contactExchange lmer results
+set.seed(123)
+dataComplete$c <- as.factor(dataComplete$c)
+
+
+contactExchangeModelPower <- glmer(contactExchange ~ c + (1|PIN) + (1|mPIN),
+  data = dataComplete, family = binomial,
+  control = glmerControl(optimizer = "optimx", optCtrl = list(method = "nlminb", iter.max = 10000, eval.max = 10000)))
+
+
+powerActual <- powerSim(contactExchangeModelPower) #88.90
+
+contactExchangeModelPower2 <- extend(contactExchangeModelPower, along = "PIN", n = 110)
+power110n <- powerSim(contactExchangeModelPower2) #83.20%
+
 
 ```
 
