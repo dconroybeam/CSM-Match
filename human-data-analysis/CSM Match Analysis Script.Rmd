@@ -19,6 +19,7 @@ library(psych) #for ICC function
 library(data.table) #for melt function
 library(ggpubr) 
 library(viridis) #for card use graph
+
 ```
 
 ```{r functions}
@@ -342,7 +343,8 @@ exchangePlotS <- ggplot(data = dataComplete[dataComplete$c=="s",],) +
     legend.position = "none",
     panel.grid.major = element_blank(),
     panel.grid.minor = element_blank()
-  )
+  ) +
+  ggtitle("a", subtitle = "Randomly-matched dates")
 
 #ggsave("Figures/CSM Match Random Exchange Plot.tiff",exchangePlotS,height=10,width=10,dpi=300)
 
@@ -369,10 +371,19 @@ exchangePlotR <- ggplot(data = dataComplete[dataComplete$c=="r",],) +
     legend.position = "none",
     panel.grid.major = element_blank(),
     panel.grid.minor = element_blank()
-  )
+  )+
+  ggtitle("b", subtitle = "Algorithm-matched dates")
 
 #ggsave("Figures/CSM Match Matched Exchange Plot.tiff",exchangePlotR,height=10,width=10,dpi=300)
 
+#combined contact exchange plots
+combinedContactPlot <- ggarrange(exchangePlotS + theme(axis.title = element_blank()),
+                                 exchangePlotR + theme(axis.title = element_blank()),
+                                 ncol = 2)
+combinedContactPlot <- annotate_figure(combinedContactPlot, left = text_grob("Date Share Choice", rot = 90, size = 30),
+                                       bottom = text_grob("Participant Share Choice", size = 30))
+
+#ggsave("Figures/CSM Match Matched Exchange Plot Combined.jpeg",combinedContactPlot,height=10,width=20,dpi=300)
 
 ##interest plot
 
@@ -457,7 +468,7 @@ interestPrefMatchPlot <- ggplot(dataComplete, aes(x = scale(prefMatch), y = scal
   geom_point(alpha = 0.3) +
   geom_smooth(method = "lm", se = TRUE, color = "#28B68F") +
   labs(
-    x = "Perceived Match of Date's Traits to Reported Ideals",
+    x = "Perceived Match of Date's Traits to Reported Ideals \n(Standardized)",
     y = "Romantic Attraction to Date (Standardized)"
   ) +
   theme_minimal() +
