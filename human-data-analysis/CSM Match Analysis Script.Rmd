@@ -19,6 +19,7 @@ library(psych) #for ICC function
 library(data.table) #for melt function
 library(ggpubr) 
 library(viridis) #for card use graph
+library(simr) #for power simulations (powerSim function)
 
 ```
 
@@ -300,8 +301,15 @@ dataComplete$prefMatchPre <- sapply(1:nrow(dataComplete), function(x)
      as.numeric(dataComplete[x, 115:129]))) #date ratings
 
 #redo romantic attraction model with prefMatchPre (exploratory prediction 1b)
-attractionModelPerceivedOnlyPreDate <- lmer(scale(ltAttraction) ~ scale(prefMatchPre) + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
+attractionModelPerceivedPreDate <- lmer(scale(ltAttraction) ~ scale(prefMatchPre) + c + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
 
+
+##Exploratory analysis 8 (prefMatch w/ time 1 preferences and date's reports of their own traits)
+dataComplete$prefMatchPreAndDateSelfRatings <- sapply(1:nrow(dataComplete), function(x)
+  mv(as.numeric(matchData[match(dataComplete$PIN[x], matchData$PIN), 53:67]), #ideals time 1
+     as.numeric(dataComplete[x, 160:174]))) #date ratings
+
+attractionModelDateRatingsAndPreDate <- lmer(scale(ltAttraction) ~ scale(prefMatchPreAndDateSelfRatings) + c + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
 ```
 
 ```{r plotting}
@@ -644,7 +652,7 @@ participantRace <- table(matchDataFiltered$raceText)
 ```
 
 ```{r future contact info}
-
+#not relevant for current study, just for potential follow up
 #load in debrief data
 debriefData <- read.csv("human-data/raw-data/Blind Date Debrief - V3_June 13, 2025_13.09.csv")
 
