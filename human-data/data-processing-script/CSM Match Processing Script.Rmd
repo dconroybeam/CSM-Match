@@ -99,6 +99,12 @@ dupIndices <- which(duplicated(data$p) | duplicated(data$p, fromLast = TRUE))
 data <- data[-c(83, 264, 275),]
 
 
+#same day
+data$StartDate <- as.Date(data$StartDate)
+sameDayDates <- data %>% 
+  count(PIN, StartDate) %>%
+  filter(n>1)
+
 #remove unnecessary columns
 data <- data[18:131]
 
