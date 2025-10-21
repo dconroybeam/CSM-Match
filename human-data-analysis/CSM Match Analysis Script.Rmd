@@ -503,8 +503,6 @@ secondDateViolin <- ggplot(dataComplete, aes(x = c, y = scale(dateInterest), fil
 
 
 
-
-
 #Exploratory prediction: recommended matches are closer in mv than random
 
 prefMatchActualViolin <- ggplot(dataComplete, aes(x = c, y = scale(prefMatchActual), fill = c)) +
@@ -517,6 +515,63 @@ prefMatchActualViolin <- ggplot(dataComplete, aes(x = c, y = scale(prefMatchActu
   theme(text = element_text(size = 25), legend.position = "none")
 #ggsave("Figures/CSM Match Actual Pref Match.tiff",prefMatchActualViolin,height=10,width=10,dpi=300)
 
+
+
+##Exploratory prediction 3: Romantic attraction & second date interest as a function of prefmatch and perceived date attraction
+
+#romantic attraction
+dataComplete <- dataComplete %>%
+  mutate(ltAttractionDateBinned = ntile(ltAttractionDate, 2), 
+         ltAttractionDateBinned = factor(ltAttractionDateBinned, levels = c(1,2), 
+                                     labels = c("Below Median", "Above Median"))) %>%
+  filter(!is.na(ltAttractionDateBinned))
+
+attractionPrefMatchDateAttractionPlot <- ggplot(dataComplete, aes(x = scale(prefMatch), y = scale(ltAttraction), color = ltAttractionDateBinned, fill = ltAttractionDateBinned)) +
+  geom_jitter(width = .07, height = .07, alpha = .03) +
+  geom_point(alpha = .3)+
+  geom_smooth(method="lm", se = TRUE, color = "black") +
+  labs(x = "Perceived Preference Match (Standardized)", 
+       y = "Romantic Attraction to Date (Standardized)",
+       fill = "Perceptions of Date's Romantic Attraction\n(Standardized & Binned)")+
+  scale_color_manual(
+    guide = "none",
+    values = c("Below Median" = "#28B6B1",
+               "Above Median" = "#C25577"))+
+  scale_fill_manual(
+    values = c("Below Median" = "#28B6B1",
+               "Above Median" = "#C25577"))+
+  theme_minimal()+
+  theme(text = element_text(size = 25))
+
+#ggsave("Figures/CSM Match attractionFromDateAttraction.tiff",attractionPrefMatchDateAttractionPlot,height=10,width=15,dpi=300)
+
+
+#second date interest
+dataComplete <- dataComplete %>%
+  mutate(dateInterestDateBinned = ntile(dateInterestDate, 2), 
+         dateInterestDateBinned = factor(dateInterestDateBinned, levels = c(1,2), 
+                                     labels = c("Below Median", "Above Median"))) %>%
+  filter(!is.na(dateInterestDateBinned))
+
+interestPrefMatchDateInterestPlot <- ggplot(dataComplete, aes(x = scale(prefMatch), y = scale(dateInterest), color = dateInterestDateBinned, fill = dateInterestDateBinned)) +
+  geom_jitter(width = .07, height = .07, alpha = .03) +
+  geom_point(alpha = .3)+
+  geom_smooth(method="lm", se = TRUE, color = "black") +
+  labs(x = "Perceived Preference Match (Standardized)", 
+       y = "Interest in a Second Date (Standardized)",
+       fill = "Perceptions of Date's Second Date Interest\n(Standardized & Binned)")+
+  scale_color_manual(
+    guide = "none",
+    values = c("Below Median" = "#28B6B1",
+               "Above Median" = "#C25577"))+
+  scale_fill_manual(
+    values = c("Below Median" = "#28B6B1",
+               "Above Median" = "#C25577"))+
+  theme_minimal()+
+  theme(text = element_text(size = 25))
+
+
+#ggsave("Figures/CSM Match interestFromDateInterest.tiff",interestPrefMatchDateInterestPlot,height=10,width=15,dpi=300)
 
 
 ```
@@ -623,6 +678,11 @@ interestPrefMatchPrePlot <- ggplot(dataComplete, aes(x = scale(prefMatchPre), y 
   theme(text=element_text(size=25))
 
 #ggsave("Figures/CSM Match Interest PrefMatch Pre Plot.tiff",interestPrefMatchPrePlot,height=10,width=10,dpi=300)
+
+
+
+
+
 ```
 
 ```{r demographics}
@@ -683,8 +743,8 @@ dataComplete$c <- as.factor(dataComplete$c)
 
 
 contactExchangeModelPower <- glmer(contactExchange ~ c + (1|PIN) + (1|mPIN),
-  data = dataComplete, family = binomial,
-  control = glmerControl(optimizer = "optimx", optCtrl = list(method = "nlminb", iter.max = 10000, eval.max = 10000)))
+                                   data = dataComplete, family = binomial,
+                                   control = glmerControl(optimizer = "optimx", optCtrl = list(method = "nlminb", iter.max = 10000, eval.max = 10000)))
 
 
 powerActual <- powerSim(contactExchangeModelPower) #88.90
