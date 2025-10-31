@@ -105,6 +105,17 @@ sameDayDates <- data %>%
   count(PIN, StartDate) %>%
   filter(n>1)
 
+
+#average amount of days between dates
+
+avgDayDiff <- data %>%
+  group_by(PIN) %>%
+  filter(sum(!is.na(StartDate)) == 2) %>% #keep IDs w/ two dates only
+  arrange(PIN, StartDate) %>%
+  summarise(dayDifference = as.numeric(max(StartDate) - min(StartDate)), .groups = "drop")
+MeanAvgDayDiff <- mean(avgDayDiff$dayDifference, na.rm = TRUE)
+
+
 #remove unnecessary columns
 data <- data[18:131]
 
