@@ -123,13 +123,12 @@ dataComplete$date<-sapply(1:nrow(dataComplete),function(x)
 
 
 attractionModel <- lmer(scale(ltAttraction) ~ c + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
-attractionModelSexMain <- lmer(scale(ltAttraction) ~ c+sex + (1|PIN) + (1|mPIN), 
-  data = dataComplete) #no sig int; looking at main
-
+attractionModelSexMain <- lmer(scale(ltAttraction) ~ c*sex + (1|PIN) + (1|mPIN), 
+  data = dataComplete) #no sig int 
 
 secondDateModel <- lmer(scale(dateInterest) ~ c + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
-secondDateModelSexMain <- lmer(scale(dateInterest) ~ c+sex + (1|PIN) + (1|mPIN), 
-  data = dataComplete) #no sig int; looking at main
+secondDateModelSexMain <- lmer(scale(dateInterest) ~ c*sex + (1|PIN) + (1|mPIN), 
+  data = dataComplete) #no sig int
 
 
 contactExchangeModel <- glmer(contactExchange ~ c + (1|PIN) + (1|mPIN),
@@ -137,11 +136,8 @@ contactExchangeModel <- glmer(contactExchange ~ c + (1|PIN) + (1|mPIN),
   control = glmerControl(optimizer = "optimx", optCtrl = list(method = "nlminb", iter.max = 10000, eval.max = 10000)))
   #need optimizer to fix convergence issue
 
-contactExchangeModelMen <- glmer(contactExchange ~ c + (1|PIN), #dropped mPIN random effect bc low variance
-  data = dataComplete[dataComplete$sex == "1",], family = binomial)
-
-contactExchangeModelSexMain <- glmer(contactExchange ~ c+sex + (1|PIN) + (1|mPIN), 
-  data = dataComplete, family = binomial)#no sig int; looking at main
+contactExchangeModelSexMain <- glmer(contactExchange ~ c*sex + (1|PIN) + (1|mPIN), 
+  data = dataComplete, family = binomial)#no sig int
 
 
 
@@ -310,6 +306,35 @@ dataComplete$prefMatchPreAndDateSelfRatings <- sapply(1:nrow(dataComplete), func
      as.numeric(dataComplete[x, 160:174]))) #date ratings
 
 attractionModelDateRatingsAndPreDate <- lmer(scale(ltAttraction) ~ scale(prefMatchPreAndDateSelfRatings) + c + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
+
+
+#Exploratory analysis 8: is physical attractiveness driving all effects
+
+attractionModelPhysAtt <- lmer(scale(ltAttraction) ~ c +  scale(datePhysattComp) + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
+attractionModelPhysAttPrefMatch <- lmer(scale(ltAttraction) ~ scale(prefMatch) + scale(datePhysattComp) + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
+
+
+secondDateModelPhysAtt <- lmer(scale(dateInterest) ~ c + scale(datePhysattComp) + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
+secondDateModelPhysAttPrefMatch <- lmer(scale(dateInterest) ~ scale(prefMatch) + scale(datePhysattComp) + (1|PIN) + (1|mPIN), data = dataComplete)
+
+
+contactExchangeModelPhysAtt <- glmer(
+  contactExchange ~ c + scale(datePhysattComp) + (1|PIN), #remove 1|mPIN bc vcov = 0 and causing singular fit issues
+  data = dataComplete,
+  family = binomial)
+
+contactExchangeModelPhysAttPrefMatch <- glmer(
+  contactExchange ~ scale(prefMatch) + datePhysattComp + (1|PIN) + (1|mPIN), 
+  data = dataComplete,
+  family = binomial)
+
+
+
+#exploratory analysis 9: model with perceived and actual match together 
+attractionModelPerceivedAndActual <- lmer(scale(ltAttraction) ~ scale(prefMatch) + scale(prefMatchActual) + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
+
+
+
 ```
 
 ```{r plotting}
@@ -631,7 +656,15 @@ contactSexPlotPanel <- ggarrange(femaleContactPlot, maleContactPlot, nrow=1, nco
 
 ##participant ratings of date ~ card use * date self ratings
 #bin card use into quartiles
-dataMelt$cardUseBinned <- ntile(dataMelt$cardUse, 4)
+dataMelt$cardUseBinned <- ntile(dataMelt$cardUse, 2)
+
+dataMelt <- dataMelt %>%
+  mutate(cardUseBinned = ntile(cardUse, 2),
+         cardUseBinned = factor(cardUseBinned,
+                                levels = c(1, 2),
+                                labels = c("Below Median", "Above Median"))) %>%
+  filter(!is.na(cardUseBinned))
+
 
 cardUseRatingAccuracyPlot <- ggplot(dataMelt, aes(x = mate, y = date, color = factor(cardUseBinned), fill = factor(cardUseBinned)))+
   geom_jitter(width = .07, height = .07, alpha = .03) +
@@ -640,10 +673,14 @@ cardUseRatingAccuracyPlot <- ggplot(dataMelt, aes(x = mate, y = date, color = fa
   labs(
     x = "Date Partner Self-Ratings",
     y = "Participant Ratings of Date Partner",
-    fill = "Card Use (Binned into Quartiles)"
-  ) +
-  scale_color_discrete(guide = "none") +
-  scale_fill_viridis(discrete = TRUE, option = "inferno", labels = c("Q1: Bottom 25%", "Q2: 25%-50%", "Q3: 50%-75%", "Q4: Top 25%")) +
+    fill = "Card Use (Median Split)")+ 
+  scale_color_manual(
+    guide = "none",
+    values = c("Below Median" = "#28B6B1",
+               "Above Median" = "#C25577"))+
+  scale_fill_manual(
+    values = c("Below Median" = "#28B6B1",
+               "Above Median" = "#C25577"))+
   theme_minimal() +
   theme(text=element_text(size=25))
 
