@@ -19,7 +19,7 @@ library(psych) #for ICC function
 library(data.table) #for melt function
 library(ggpubr) 
 library(viridis) #for card use graph
-library(simr) #for power simulations (powerSim function)
+library(car) #for levene's test
 
 ```
 
@@ -42,6 +42,32 @@ matchData <- read.csv('human-data/processed-data/matchDataProcessed 042725.csv')
 
 
 data <- read.csv('human-data/processed-data/postDateProcessed 042725.csv')
+
+```
+
+```{r demographics}
+
+participantAge <- summary(matchDataFiltered$age)
+participantQuarter <- table(matchDataFiltered$quarter)
+participantSex <- table(matchDataFiltered$sex)
+participantSexOrient <- table(matchDataFiltered$sexOrient)
+participantGender <- table(matchDataFiltered$gender)
+
+
+#race
+matchDataFiltered$raceText<- apply(matchDataFiltered[, 10:16], 1, function(x) {
+  selected <- which(x == 1)
+  
+  if (length(selected) == 0) {
+    return(NA)  # No race selected
+  } else if (length(selected) == 1) {
+    return(names(x)[selected])  # Only one race selected
+  } else {
+    return("Multiracial")  # Multiple races selected
+  }
+})
+
+participantRace <- table(matchDataFiltered$raceText)
 
 ```
 
@@ -72,13 +98,7 @@ histNextDate <- hist(data$dateInterest)
 tableExchange <- table(data$contactExchange, data$c)
 
 
-
-
-```
-
-```{r main predictions}
-
-#make data frame with only people that completed 2 dates
+##Create dataframe with only participants who completed both dates##
 
 #first see who mutually exchanged contact info
 data$contactReceive<-sapply(1:nrow(data),function(x)
@@ -101,8 +121,7 @@ mutuals <- data[sapply(1:nrow(data), function(x) {
 }), c("PIN", "mPIN")]
 
 
-
-##column for number of dates
+#column for number of dates
 data <- data %>% 
   group_by(PIN) %>%
   mutate(numDates = n()) %>%
@@ -121,30 +140,9 @@ dataComplete$date<-sapply(1:nrow(dataComplete),function(x)
   )
 
 
-
-attractionModel <- lmer(scale(ltAttraction) ~ c + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
-attractionModelSexMain <- lmer(scale(ltAttraction) ~ c*sex + (1|PIN) + (1|mPIN), 
-  data = dataComplete) #no sig int 
-
-secondDateModel <- lmer(scale(dateInterest) ~ c + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
-secondDateModelSexMain <- lmer(scale(dateInterest) ~ c*sex + (1|PIN) + (1|mPIN), 
-  data = dataComplete) #no sig int
-
-
-contactExchangeModel <- glmer(contactExchange ~ c + (1|PIN) + (1|mPIN),
-  data = dataComplete, family = binomial,
-  control = glmerControl(optimizer = "optimx", optCtrl = list(method = "nlminb", iter.max = 10000, eval.max = 10000)))
-  #need optimizer to fix convergence issue
-
-contactExchangeModelSexMain <- glmer(contactExchange ~ c*sex + (1|PIN) + (1|mPIN), 
-  data = dataComplete, family = binomial)#no sig int
-
-
-
-
 ```
 
-```{r rating agreement}
+```{r rating agreement & prefMatch calc}
 
 ##calculate perception accuracy 
 
@@ -184,51 +182,13 @@ traitCorsPrePost <- data.frame("trait" = colnamesTraits,
 
 ```
 
-```{r Exploratory models}
-
-#Exploratory Prediction 1: relationship between condition and romantic interest will be mediated by partner perception accuracy
-attractionModelPerceived <- lmer(scale(ltAttraction) ~ c + scale(prefMatch) + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
-
-#Exploratory Prediction 1b: romantic interest can be predicted by prefMatch
-attractionModelPerceivedOnly <- lmer(scale(ltAttraction) ~ scale(prefMatch) + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
-
-#Exploratory Prediction 2: There will be more variance in romantic interest between participants in randomly assigned date partners relative to matched date partners. 
-
-varConditionR <- var(dataComplete$ltAttraction[dataComplete$c == "r"])
-
-varConditionS <- var(dataComplete$ltAttraction[dataComplete$c == "s"], na.rm = TRUE) #one NA case
-
-#to test if they are significantly different
-varTest <- var.test(dataComplete$ltAttraction[dataComplete$c == "r"], dataComplete$ltAttraction[dataComplete$c == "s"], paired = TRUE)
+```{r Main Manuscript Analyses}
 
 
-##Exploratory prediction 3 (not pre-registered): interest in another date ~ perceived MV * perceived interest
-dateInterestReciprocityModel <-lmer(scale(dateInterest)~scale(dateInterestDate)*scale(prefMatch)+(1|PIN)+(1|mPIN),data=dataComplete)
-ltAttractionReciprocityModel<-lmer(scale(ltAttraction)~scale(ltAttractionDate)*scale(prefMatch)+(1|PIN)+(1|mPIN),data=dataComplete)
-stAttractionReciprocityModel<-lmer(scale(stAttraction)~scale(stAttractionDate)*scale(prefMatch)+(1|PIN)+(1|mPIN),data=dataComplete)
+###ANALYSES###
 
 
-
-
-##Exploratory prediction 4 (not pre-registered): perception accuracy is predicted by card use
-
-dataMelt<-melt(as.data.table(data),id.vars=c("PIN","mPIN","cardUse"),
-               measure.vars=list(115:129,160:174),
-               value.name=c("date","mate")) #date = participant rating of their date; mate = partner's rating of themselves
-
-dataMelt$variable<-rep(colnames(data[,160:174]),each=nrow(data))
-
-dataMelt$variable<-gsub("mate","",dataMelt$variable)
-dataMelt$variable<-gsub("Comp","",dataMelt$variable)
-
-dataMelt$variable<-factor(dataMelt$variable)
-
-cardEffectModel<-lmer(date~mate*cardUse+(1|PIN)+(1|mPIN),data=dataMelt)
-
-
-
-
-#Exploratory analysis 5 (not pre-reg): Is prefmatch (of ideals to partner's self rated traits, not impressions) predicted by condition? (Are we making better recs)
+#Are participants' matched dates a better match to their preferences? (not pre-registered)
 
 dataComplete$prefMatchActual <- apply(dataComplete, 1, function(x)
   mv(x[145:159], x[160:174])) #first is ideals, second is date's ratings of themselves
@@ -238,17 +198,85 @@ prefMatchActualModel <- lmer(scale(prefMatchActual) ~ c + (1|PIN) + (1|mPIN), da
 prefMatchConditionActual <- tapply(dataComplete$prefMatchActual,list(dataComplete$c,dataComplete$sex),mean)
 
 
+##SECOND DATE INTEREST
+
+#Do matched dates result in greater second date interest? (pre-registered)
+
+secondDateModel <- lmer(scale(dateInterest) ~ c + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
+secondDateModelSexMain <- lmer(scale(dateInterest) ~ c*sex + (1|PIN) + (1|mPIN), 
+  data = dataComplete) #no sig int
 
 
-
-#Exploratory analysis 6 (not pre-reg): Are outcome variables predicted by card use? 
-
-dateInterestCardUseModel <- lmer(scale(dateInterest) ~ scale(cardUse) + scale(prefMatch) + (1|PIN) + (1|mPIN), data = dataComplete)
-ltAttractionCardUseModel <- lmer(scale(ltAttraction) ~ scale(cardUse) + scale(prefMatch) + (1|PIN) + (1|mPIN), data = dataComplete)
-contactExchangeCardUseModel <- glmer(contactExchange ~ scale(cardUse) + scale(prefMatch) + (1|PIN) + (1|mPIN), data = dataComplete, family = binomial)
+#Is interest in a second date predicted by prefMatch*dateSecondDateInterest? (not pre-registered)
+dateInterestReciprocityModel <-lmer(scale(dateInterest)~scale(dateInterestDate)*scale(prefMatch)+(1|PIN)+(1|mPIN),data=dataComplete)
 
 
-#Exploratory analysis 7 (not pre-reg): Zietch pref label shuffle permutation test
+##LT ATTRACTION
+
+#Do matched dates result in greater romantic attraction? (pre-registered)
+attractionModel <- lmer(scale(ltAttraction) ~ c + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
+attractionModelSexMain <- lmer(scale(ltAttraction) ~ c*sex + (1|PIN) + (1|mPIN), 
+  data = dataComplete) #no sig int 
+
+#Is romantic attraction predicted by pref match? (not pre-registered)
+dataComplete$c <- as.factor(dataComplete$c)
+
+attractionModelPerceived <- lmer(scale(ltAttraction) ~ c + scale(prefMatch) + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
+attractionModelPerceivedOnly <- lmer(scale(ltAttraction) ~ scale(prefMatch) + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
+
+#Is romantic attraction predicted by pref match (with pre-date ideals)? (not pre-registered)
+dataComplete$prefMatchPre <- sapply(1:nrow(dataComplete), function(x)
+  mv(as.numeric(matchData[match(dataComplete$PIN[x], matchData$PIN), 53:67]), #ideals time 1
+     as.numeric(dataComplete[x, 115:129]))) #date ratings
+
+attractionModelPerceivedPreDate <- lmer(scale(ltAttraction) ~ scale(prefMatchPre) + c + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
+
+#Is romantic attraction predicted by pref match (with pre-date ideals and partner's self-reported traits, not perceptions)
+dataComplete$prefMatchPreAndDateSelfRatings <- sapply(1:nrow(dataComplete), function(x)
+  mv(as.numeric(matchData[match(dataComplete$PIN[x], matchData$PIN), 53:67]), #ideals time 1
+     as.numeric(dataComplete[x, 160:174]))) #date ratings
+
+attractionModelDateRatingsAndPreDate <- lmer(scale(ltAttraction) ~ scale(prefMatchPreAndDateSelfRatings) + c + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
+
+#Is romantic attraction predicted by prefMatch*dateLtAttraction? 
+ltAttractionReciprocityModel<-lmer(scale(ltAttraction)~scale(ltAttractionDate)*scale(prefMatch)+(1|PIN)+(1|mPIN),data=dataComplete)
+
+##CONTACT EXCHANGE
+
+
+#Is contact exchange (yes/no) predicted by condition? 
+
+contactExchangeModel <- glmer(contactExchange ~ c + (1|PIN) + (1|mPIN),
+  data = dataComplete, family = binomial,
+  control = glmerControl(optimizer = "optimx", optCtrl = list(method = "nlminb", iter.max = 10000, eval.max = 10000))) #need optimizer to fix convergence issue
+
+contactExchangeModelSexMain <- glmer(contactExchange ~ c*sex + (1|PIN) + (1|mPIN), 
+  data = dataComplete, family = binomial)#no sig int
+
+```
+
+```{r Supplemental Materials: Pre-registered Analyses}
+
+##chi square test looking at relationship between condition (matched vs random) and contact exchange (yes/no)
+chisqTestConditionByExchange <- chisq.test(table(dataComplete$c, dataComplete$contactExchange))
+
+##t-test: variance in romantic interest by condition
+varConditionR <- var(dataComplete$ltAttraction[dataComplete$c == "r"])
+varConditionS <- var(dataComplete$ltAttraction[dataComplete$c == "s"], na.rm = TRUE) #one NA case
+varTest <- car::leveneTest(ltAttraction ~ c, data = dataComplete) #to test if they are significantly different (can't do F-test bc not normally distributed)
+
+##sexual attraction
+stAttractionCondition <- lmer(scale(stAttraction) ~ c + (1|PIN) + (1|mPIN), data = dataComplete)
+stAttractionModelPrefMatch <- lmer(scale(stAttraction) ~ c + scale(prefMatch) + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
+stAttractionReciprocityModel<-lmer(scale(stAttraction)~scale(stAttractionDate)*scale(prefMatch)+(1|PIN)+(1|mPIN),data=dataComplete)
+
+
+```
+
+```{r Supplemental Materials: Analyses not pre-registered}
+
+##PERMUTATION TEST
+set.seed(1220)
 
 #make new df just for this
 permutationData <- dataComplete[,c(113, 114, 110, 145:159, 115:129, 94:96, 100)]
@@ -291,33 +319,17 @@ permutationCI <- quantile(permutationRecord$t, probs = c(0.025, 0.975))
 
 
 
-##Exploratory analysis 7 (prefMatch w/ time 1 preferences)
-dataComplete$prefMatchPre <- sapply(1:nrow(dataComplete), function(x)
-  mv(as.numeric(matchData[match(dataComplete$PIN[x], matchData$PIN), 53:67]), #ideals time 1
-     as.numeric(dataComplete[x, 115:129]))) #date ratings
+##PHYS ATT: is physical attractiveness, not preference match, just responsible for increased attraction to certain partners?##
 
-#redo romantic attraction model with prefMatchPre (exploratory prediction 1b)
-attractionModelPerceivedPreDate <- lmer(scale(ltAttraction) ~ scale(prefMatchPre) + c + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
-
-
-##Exploratory analysis 8 (prefMatch w/ time 1 preferences and date's reports of their own traits)
-dataComplete$prefMatchPreAndDateSelfRatings <- sapply(1:nrow(dataComplete), function(x)
-  mv(as.numeric(matchData[match(dataComplete$PIN[x], matchData$PIN), 53:67]), #ideals time 1
-     as.numeric(dataComplete[x, 160:174]))) #date ratings
-
-attractionModelDateRatingsAndPreDate <- lmer(scale(ltAttraction) ~ scale(prefMatchPreAndDateSelfRatings) + c + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
-
-
-#Exploratory analysis 8: is physical attractiveness driving all effects
-
+#romantic attraction
 attractionModelPhysAtt <- lmer(scale(ltAttraction) ~ c +  scale(datePhysattComp) + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
 attractionModelPhysAttPrefMatch <- lmer(scale(ltAttraction) ~ scale(prefMatch) + scale(datePhysattComp) + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
 
-
+#second date interest
 secondDateModelPhysAtt <- lmer(scale(dateInterest) ~ c + scale(datePhysattComp) + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
 secondDateModelPhysAttPrefMatch <- lmer(scale(dateInterest) ~ scale(prefMatch) + scale(datePhysattComp) + (1|PIN) + (1|mPIN), data = dataComplete)
 
-
+#contact exchange
 contactExchangeModelPhysAtt <- glmer(
   contactExchange ~ c + scale(datePhysattComp) + (1|PIN), #remove 1|mPIN bc vcov = 0 and causing singular fit issues
   data = dataComplete,
@@ -329,15 +341,36 @@ contactExchangeModelPhysAttPrefMatch <- glmer(
   family = binomial)
 
 
+```
 
-#exploratory analysis 9: model with perceived and actual match together 
-attractionModelPerceivedAndActual <- lmer(scale(ltAttraction) ~ scale(prefMatch) + scale(prefMatchActual) + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
+```{r Card use analyses - Not Reported}
+
+##Is perception accuracy predicted by card use?
+dataMelt<-melt(as.data.table(data),id.vars=c("PIN","mPIN","cardUse"),
+               measure.vars=list(115:129,160:174),
+               value.name=c("date","mate")) #date = participant rating of their date; mate = partner's rating of themselves
+
+dataMelt$variable<-rep(colnames(data[,160:174]),each=nrow(data))
+
+dataMelt$variable<-gsub("mate","",dataMelt$variable)
+dataMelt$variable<-gsub("Comp","",dataMelt$variable)
+
+dataMelt$variable<-factor(dataMelt$variable)
+
+cardEffectModel<-lmer(date~mate*cardUse+(1|PIN)+(1|mPIN),data=dataMelt)
 
 
+##Are outcome variables predicted by card use? 
+
+dateInterestCardUseModel <- lmer(scale(dateInterest) ~ scale(cardUse) + scale(prefMatch) + (1|PIN) + (1|mPIN), data = dataComplete)
+ltAttractionCardUseModel <- lmer(scale(ltAttraction) ~ scale(cardUse) + scale(prefMatch) + (1|PIN) + (1|mPIN), data = dataComplete)
+contactExchangeCardUseModel <- glmer(contactExchange ~ scale(cardUse) + scale(prefMatch) + (1|PIN) + (1|mPIN), data = dataComplete, family = binomial)
 
 ```
 
-```{r plotting}
+```{r Plots}
+
+
 dataComplete$contactRecip<-ifelse(dataComplete$contactExchange==1 & dataComplete$contactReceive==1,
                                   "Mutual Exchange",ifelse(
                                     dataComplete$contactExchange==0 & dataComplete$contactReceive==0,
@@ -484,7 +517,7 @@ impressionPlot<-ggplot(data=dataMelt,
 
 
 
-#prediction 1: attraction graph
+#Attraction by condition
 attractionViolin <- ggplot(dataComplete, aes(x = c, y = scale(ltAttraction), fill = c)) +
   geom_violin(trim = FALSE) +
   geom_boxplot(width = 0.3, outlier.shape = NA, size = 1, fill = "white") +  
@@ -495,7 +528,7 @@ attractionViolin <- ggplot(dataComplete, aes(x = c, y = scale(ltAttraction), fil
   theme(text=element_text(size=25),legend.position="none")
 #ggsave("Figures/CSM Match Attraction Violin Plot.tiff",attractionViolin,height=10,width=10,dpi=300)
 
-##Exploratory Prediction 1b: can predict interest with prefMatch
+##Attraction by prefmatch
 interestPrefMatchPlot <- ggplot(dataComplete, aes(x = scale(prefMatch), y = scale(ltAttraction)))+
   geom_jitter(width = .07, height = .07, alpha = .03) +
   geom_point(alpha = 0.3) +
@@ -512,9 +545,7 @@ interestPrefMatchPlot <- ggplot(dataComplete, aes(x = scale(prefMatch), y = scal
 
 
 
-##Prediction 2 -- dateinterest ~ condition
-#secondDateModel <- lmer(scale(dateInterest) ~ c + (1|PIN) + (1|mPIN), data = dataComplete) #standardized outcome
-
+##Date interest by condition
 secondDateViolin <- ggplot(dataComplete, aes(x = c, y = scale(dateInterest), fill = c)) +
   geom_violin(trim = FALSE) +
   geom_boxplot(width = 0.3, outlier.shape = NA, size = 1, fill = "white") +  # add boxplots inside violins
@@ -528,8 +559,7 @@ secondDateViolin <- ggplot(dataComplete, aes(x = c, y = scale(dateInterest), fil
 
 
 
-#Exploratory prediction: recommended matches are closer in mv than random
-
+##prefMatch by condition
 prefMatchActualViolin <- ggplot(dataComplete, aes(x = c, y = scale(prefMatchActual), fill = c)) +
   geom_violin(trim = FALSE) +
   geom_boxplot(width = 0.3, outlier.shape = NA, size = 1, fill = "white") +
@@ -542,9 +572,7 @@ prefMatchActualViolin <- ggplot(dataComplete, aes(x = c, y = scale(prefMatchActu
 
 
 
-##Exploratory prediction 3: Romantic attraction & second date interest as a function of prefmatch and perceived date attraction
-
-#romantic attraction
+##Romantic attraction & second date interest as a function of prefmatch and perceived date attraction
 dataComplete <- dataComplete %>%
   mutate(ltAttractionDateBinned = ntile(ltAttractionDate, 2), 
          ltAttractionDateBinned = factor(ltAttractionDateBinned, levels = c(1,2), 
@@ -571,7 +599,7 @@ attractionPrefMatchDateAttractionPlot <- ggplot(dataComplete, aes(x = scale(pref
 #ggsave("Figures/CSM Match attractionFromDateAttraction.tiff",attractionPrefMatchDateAttractionPlot,height=10,width=15,dpi=300)
 
 
-#second date interest
+##second date interest by prefMatch
 dataComplete <- dataComplete %>%
   mutate(dateInterestDateBinned = ntile(dateInterestDate, 2), 
          dateInterestDateBinned = factor(dateInterestDateBinned, levels = c(1,2), 
@@ -594,86 +622,23 @@ interestPrefMatchDateInterestPlot <- ggplot(dataComplete, aes(x = scale(prefMatc
                "Above Median" = "#C25577"))+
   theme_minimal()+
   theme(text = element_text(size = 25))
-
-
 #ggsave("Figures/CSM Match interestFromDateInterest.tiff",interestPrefMatchDateInterestPlot,height=10,width=15,dpi=300)
 
 
-```
+##sexual attraction as an interaction of prefMatch and perceptions of the date partner's reciprocal sexual attraction
+dataComplete <- dataComplete %>%
+  mutate(stAttractionDateBinned = ntile(stAttractionDate, 2), 
+         stAttractionDateBinned = factor(stAttractionDateBinned, levels = c(1,2), 
+                                     labels = c("Below Median", "Above Median"))) %>%
+  filter(!is.na(stAttractionDateBinned))
 
-```{r Bonus Plots for HBES}
-
-
-##Contact Exchange Sex differences
-
-#i want a plot for men with contact yes and contact no on one axis, and condition on the other
-maleContactData <- data.frame(((table(dataComplete$contactExchange[dataComplete$sex == 1], dataComplete$c[dataComplete$sex == 1]))/sum(table(dataComplete$contactExchange[dataComplete$sex == 1], dataComplete$c[dataComplete$sex == 1])))*100)
-
-colnames(maleContactData) <- c("contactShared", "condition", "frequency")
-
-maleContactData[,3] <- round(maleContactData[,3], 2)
-conditionOrder <- c("s", "r")
-maleContactData$condition <- factor(maleContactData$condition, levels = conditionOrder)
-
-maleContactPlot <- ggplot(maleContactData, aes(x = condition, y = contactShared, fill = frequency)) +
-  geom_tile(color = "white") +
-  geom_text(label = maleContactData$frequency, size = 12)+
-  scale_fill_gradient(low = "whitesmoke", high = "#009E73") +
-  scale_x_discrete(labels = c("Random", "Matched")) +
-  labs(y = "Contact Info Shared", x = "Date Condition", fill = "Frequency") +
-  theme(text = element_text(size = 35), legend.position = "none") +
-  ggtitle("Male Participants")
-
-#Women
-femaleContactData <- data.frame(((table(dataComplete$contactExchange[dataComplete$sex == 0], dataComplete$c[dataComplete$sex == 0]))/sum(table(dataComplete$contactExchange[dataComplete$sex == 0], dataComplete$c[dataComplete$sex == 0])))*100)
-
-colnames(femaleContactData) <- c("contactShared", "condition", "frequency")
-
-femaleContactData[,3] <- round(femaleContactData[,3], 2)
-conditionOrder <- c("s", "r")
-femaleContactData$condition <- factor(femaleContactData$condition, levels = conditionOrder)
-
-femaleContactPlot <- ggplot(femaleContactData, aes(x = condition, y = contactShared, fill = frequency)) +
-  geom_tile(color = "white") +
-  geom_text(label = femaleContactData$frequency, size = 12)+
-  scale_fill_gradient(low = "whitesmoke", high = "#009E73") +
-  scale_x_discrete(labels = c("Random", "Matched")) +
-  labs(y = "Contact Info Shared", x = "Date Condition", fill = "Frequency") +
-  theme(text = element_text(size = 35), legend.position = "none") +
-  ggtitle("Female Participants")
-
-
-#sex differences panel plot
-contactSexPlotPanel <- ggarrange(femaleContactPlot, maleContactPlot, nrow=1, ncol=2, 
-                             font.label = list(color = "black", size = 12))
-
-#ggsave("Figures/CSM Match Sex Differences.tiff",contactSexPlotPanel,height=10,width=20,dpi=300)
-
-
-
-
-
-
-##participant ratings of date ~ card use * date self ratings
-#bin card use into quartiles
-dataMelt$cardUseBinned <- ntile(dataMelt$cardUse, 2)
-
-dataMelt <- dataMelt %>%
-  mutate(cardUseBinned = ntile(cardUse, 2),
-         cardUseBinned = factor(cardUseBinned,
-                                levels = c(1, 2),
-                                labels = c("Below Median", "Above Median"))) %>%
-  filter(!is.na(cardUseBinned))
-
-
-cardUseRatingAccuracyPlot <- ggplot(dataMelt, aes(x = mate, y = date, color = factor(cardUseBinned), fill = factor(cardUseBinned)))+
+sexualAttractionPrefMatchDateAttractionPlot <- ggplot(dataComplete, aes(x = scale(prefMatch), y = scale(stAttraction), color = stAttractionDateBinned, fill = stAttractionDateBinned)) +
   geom_jitter(width = .07, height = .07, alpha = .03) +
-  geom_point(alpha = 0.3) +
-  geom_smooth(method = "lm", se = TRUE, color = "black") +
-  labs(
-    x = "Date Partner Self-Ratings",
-    y = "Participant Ratings of Date Partner",
-    fill = "Card Use (Median Split)")+ 
+  geom_point(alpha = .3)+
+  geom_smooth(method="lm", se = TRUE, color = "black") +
+  labs(x = "Perceived Preference Match (Standardized)", 
+       y = "Sexual Attraction to Date (Standardized)",
+       fill = "Perceptions of Date's Sexual Attraction\n(Standardized & Binned)")+
   scale_color_manual(
     guide = "none",
     values = c("Below Median" = "#28B6B1",
@@ -681,114 +646,16 @@ cardUseRatingAccuracyPlot <- ggplot(dataMelt, aes(x = mate, y = date, color = fa
   scale_fill_manual(
     values = c("Below Median" = "#28B6B1",
                "Above Median" = "#C25577"))+
-  theme_minimal() +
-  theme(text=element_text(size=25))
-
-
-
-#ggsave("Figures/CSM Match CardUse Accuracy Plot.tiff",cardUseRatingAccuracyPlot,height=10,width=15,dpi=300)
-
-
-
-##card use on romantic attraction
-ltAttractionCardUsePlot <- ggplot(dataComplete, aes(x = scale(cardUse), y = scale(ltAttraction))) +
-  geom_point(alpha = .3, color = "#389AB2")+
-  geom_smooth(method = "lm", se = TRUE, color = "black", fill = "#389AB2") +
-  labs( x = "Card Use (Standardized)", y = "Romantic Attraction (Standardized)") +
   theme_minimal()+
   theme(text = element_text(size = 25))
-    
-#ggsave("Figures/CSM Match CardUse Attraction Plot.tiff",ltAttractionCardUsePlot,height=10,width=10,dpi=300)
-
-
-
-##Exploratory prediction 7: Romantic attraction as a function of pre-date prefs
-interestPrefMatchPrePlot <- ggplot(dataComplete, aes(x = scale(prefMatchPre), y = scale(ltAttraction)))+
-  geom_jitter(width = .07, height = .07, alpha = .03) +
-  geom_point(alpha = 0.3) +
-  geom_smooth(method = "lm", se = TRUE, color = "#28B68F") +
-  labs(
-    x = "Perceived Match of Date's Traits to Reported Time 1 Ideals",
-    y = "Romantic Attraction to Date (Standardized)"
-  ) +
-  theme_minimal() +
-  theme(text=element_text(size=25))
-
-#ggsave("Figures/CSM Match Interest PrefMatch Pre Plot.tiff",interestPrefMatchPrePlot,height=10,width=10,dpi=300)
-
-
-
+#ggsave("Figures/CSM Match sexualAttractionFromDateAttractionPrefMatch.tiff",sexualAttractionPrefMatchDateAttractionPlot,height=10,width=15,dpi=300)
 
 
 ```
 
-```{r demographics}
-
-participantAge <- summary(matchDataFiltered$age)
-participantQuarter <- table(matchDataFiltered$quarter)
-participantSex <- table(matchDataFiltered$sex)
-participantSexOrient <- table(matchDataFiltered$sexOrient)
-participantGender <- table(matchDataFiltered$gender)
-
-
-#race
-matchDataFiltered$raceText<- apply(matchDataFiltered[, 10:16], 1, function(x) {
-  selected <- which(x == 1)
-  
-  if (length(selected) == 0) {
-    return(NA)  # No race selected
-  } else if (length(selected) == 1) {
-    return(names(x)[selected])  # Only one race selected
-  } else {
-    return("Multiracial")  # Multiple races selected
-  }
-})
-
-participantRace <- table(matchDataFiltered$raceText)
-
-```
-
-```{r future contact info}
-#not relevant for current study, just for potential follow up
-#load in debrief data
-debriefData <- read.csv("human-data/raw-data/Blind Date Debrief - V3_June 13, 2025_13.09.csv")
-
-#remove title rows
-debriefData <- debriefData[-c(1:2),]
-
-#remove participants outside of fall and winter (based on start date)
-debriefData <- debriefData %>%
-  mutate(StartDate = as.POSIXct(StartDate, format = "%Y-%m-%d %H:%M:%S")) %>%
-  filter(StartDate >= as.POSIXct("2024-09-22 00:00:00"))
-
-#remove duplicate pins
-debriefData <- debriefData[!duplicated(debriefData$p),]
-
-#now only keep people who are also in dataComplete
-debriefData <- subset(debriefData, p %in% dataComplete$PIN)
-
-
-#figure out how many agreed to future contact exchange
-table(debriefData$followUpConsent) #110 said yes
 
 
 
 
-#power analysis using contactExchange lmer results
-set.seed(123)
-dataComplete$c <- as.factor(dataComplete$c)
 
-
-contactExchangeModelPower <- glmer(contactExchange ~ c + (1|PIN) + (1|mPIN),
-                                   data = dataComplete, family = binomial,
-                                   control = glmerControl(optimizer = "optimx", optCtrl = list(method = "nlminb", iter.max = 10000, eval.max = 10000)))
-
-
-powerActual <- powerSim(contactExchangeModelPower) #88.90
-
-contactExchangeModelPower2 <- extend(contactExchangeModelPower, along = "PIN", n = 110)
-power110n <- powerSim(contactExchangeModelPower2) #83.20%
-
-
-```
 
