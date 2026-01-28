@@ -45,31 +45,6 @@ data <- read.csv('human-data/processed-data/postDateProcessed 042725.csv')
 
 ```
 
-```{r demographics}
-
-participantAge <- summary(matchDataFiltered$age)
-participantQuarter <- table(matchDataFiltered$quarter)
-participantSex <- table(matchDataFiltered$sex)
-participantSexOrient <- table(matchDataFiltered$sexOrient)
-participantGender <- table(matchDataFiltered$gender)
-
-
-#race
-matchDataFiltered$raceText<- apply(matchDataFiltered[, 10:16], 1, function(x) {
-  selected <- which(x == 1)
-  
-  if (length(selected) == 0) {
-    return(NA)  # No race selected
-  } else if (length(selected) == 1) {
-    return(names(x)[selected])  # Only one race selected
-  } else {
-    return("Multiracial")  # Multiple races selected
-  }
-})
-
-participantRace <- table(matchDataFiltered$raceText)
-
-```
 
 ```{r descriptives}
 
@@ -141,6 +116,34 @@ dataComplete$date<-sapply(1:nrow(dataComplete),function(x)
 
 
 ```
+
+
+```{r demographics}
+
+participantAge <- summary(matchDataFiltered$age)
+participantQuarter <- table(matchDataFiltered$quarter)
+participantSex <- table(matchDataFiltered$sex)
+participantSexOrient <- table(matchDataFiltered$sexOrient)
+participantGender <- table(matchDataFiltered$gender)
+
+
+#race
+matchDataFiltered$raceText<- apply(matchDataFiltered[, 10:16], 1, function(x) {
+  selected <- which(x == 1)
+  
+  if (length(selected) == 0) {
+    return(NA)  # No race selected
+  } else if (length(selected) == 1) {
+    return(names(x)[selected])  # Only one race selected
+  } else {
+    return("Multiracial")  # Multiple races selected
+  }
+})
+
+participantRace <- table(matchDataFiltered$raceText)
+
+```
+
 
 ```{r rating agreement & prefMatch calc}
 
